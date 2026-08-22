@@ -8,6 +8,7 @@ import com.roadlink.domain.EmergencyStore
 import com.roadlink.domain.EventOrigin
 import com.roadlink.domain.TransportKind
 import com.roadlink.net.IngestResponse
+import com.roadlink.net.ResponderEvent
 import com.roadlink.net.SosApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -167,6 +168,27 @@ class FakeSosApi(
             raw = """{"duplicate":$duplicate}""",
         )
     }
+
+    override suspend fun activeEmergencies(): List<ResponderEvent> =
+        submissions.map { (eventId, paths) ->
+            ResponderEvent(
+                eventId = eventId,
+                riderId = "rl_test",
+                createdAtDevice = 1_000L,
+                receivedAt = "2026-08-22T00:00:00.000+00:00",
+                lat = 17.4401,
+                lng = 78.3489,
+                accuracyMetres = 12,
+                confidence = 82,
+                triggers = listOf("inactivity", "peak_g"),
+                simulated = true,
+                state = "RECEIVED",
+                // First write wins, exactly as the backend behaves.
+                firstDeliveryPath = paths.first(),
+                firstRelayId = null,
+                signatureValid = true,
+            )
+        }
 
     /** How many distinct emergencies the backend holds. */
     val eventCount: Int get() = submissions.size

@@ -24,6 +24,46 @@ interface SosApi {
         relayId: String? = null,
         relayReceivedAt: Long? = null,
     ): IngestResponse
+
+    /**
+     * What the responder can actually see.
+     *
+     * Read from the backend rather than from local state on purpose: the demo
+     * claim is that the SOS *arrived*, and only the server can attest to that.
+     * A responder view backed by the device's own database would prove nothing.
+     */
+    suspend fun activeEmergencies(): List<ResponderEvent>
+}
+
+/**
+ * An emergency as the backend holds it.
+ *
+ * `firstDeliveryPath` is the honesty field: it says whether this emergency
+ * reached the server over a real BLE relay, a real network upload, or the
+ * development simulator, and the responder UI renders that distinction rather
+ * than hiding it.
+ */
+data class ResponderEvent(
+    val eventId: String,
+    val riderId: String,
+    val createdAtDevice: Long,
+    val receivedAt: String?,
+    val lat: Double?,
+    val lng: Double?,
+    val accuracyMetres: Int?,
+    val confidence: Int,
+    val triggers: List<String>,
+    val simulated: Boolean,
+    val state: String,
+    val firstDeliveryPath: String,
+    val firstRelayId: String?,
+    val signatureValid: Boolean,
+) {
+    val hasLocation: Boolean get() = lat != null && lng != null
+
+    /** True only when nothing about how this arrived was simulated. */
+    val arrivedByRealTransport: Boolean
+        get() = firstDeliveryPath == "ble_relay" || firstDeliveryPath == "direct"
 }
 
 data class IngestResponse(

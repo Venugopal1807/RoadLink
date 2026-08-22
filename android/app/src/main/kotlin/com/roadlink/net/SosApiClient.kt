@@ -5,6 +5,7 @@ import com.roadlink.domain.EmergencyEvent
 import com.roadlink.domain.TransportKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -73,6 +74,43 @@ class SosApiClient(
             conn.disconnect()
         }
     }
+
+    override suspend fun activeEmergencies(): List<ResponderEvent> = withContext(Dispatchers.IO) {
+        val conn = open("/api/v1/sos/active", "GET")
+        try {
+            if (conn.responseCode != 200) return@withContext emptyList()
+            val text = conn.inputStream.bufferedReader().use(BufferedReader::readText)
+            parseActive(text)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Uses org.json, which is part of the Android framework - no dependency added. */
+    private fun parseActive(text: String): List<ResponderEvent> = runCatching {
+        val events = JSONObject(text).optJSONArray("events") ?: return emptyList()
+        (0 until events.length()).mapNotNull { i ->
+            val o = events.optJSONObject(i) ?: return@mapNotNull null
+            ResponderEvent(
+                eventId = o.optString("event_id"),
+                riderId = o.optString("rider_id"),
+                createdAtDevice = o.optLong("created_at_device"),
+                receivedAt = o.optString("received_at").takeIf { it.isNotBlank() },
+                lat = if (o.isNull("lat")) null else o.optDouble("lat"),
+                lng = if (o.isNull("lng")) null else o.optDouble("lng"),
+                accuracyMetres = if (o.isNull("acc_m")) null else o.optInt("acc_m"),
+                confidence = o.optInt("conf"),
+                triggers = o.optJSONArray("trigger")?.let { arr ->
+                    (0 until arr.length()).map { arr.optString(it) }
+                }.orEmpty(),
+                simulated = o.optBoolean("simulated"),
+                state = o.optString("state"),
+                firstDeliveryPath = o.optString("first_delivery_path"),
+                firstRelayId = o.optString("first_relay_id").takeIf { it.isNotBlank() && it != "null" },
+                signatureValid = o.optBoolean("sig_valid"),
+            )
+        }
+    }.getOrDefault(emptyList())
 
     private fun open(path: String, method: String): HttpURLConnection =
         (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
