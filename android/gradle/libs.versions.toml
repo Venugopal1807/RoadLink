@@ -48,6 +48,11 @@ compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 
 # --- test ----------------------------------------------------------------
 junit = { group = "junit", name = "junit", version = "4.13.2" }
+# org.json ships in android.jar, but unit tests run against stubs that return
+# defaults. Putting the real implementation on the unit-test classpath is what
+# lets the packet codec - including the relay's decode path - be tested on a
+# plain JVM instead of only on a device.
+json = { group = "org.json", name = "json", version = "20240303" }
 # Instrumented tests. These cover the one thing a JVM test cannot: that Room
 # genuinely survives the database being closed and reopened, which is the
 # durability half of "persist before transmit". They run on a device.

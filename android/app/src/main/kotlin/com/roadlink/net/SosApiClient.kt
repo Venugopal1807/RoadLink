@@ -1,14 +1,11 @@
 package com.roadlink.net
 
-import com.roadlink.domain.Canonical
 import com.roadlink.domain.EmergencyEvent
 import com.roadlink.domain.TransportKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
-import java.math.BigDecimal
-import java.math.RoundingMode
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -137,24 +134,10 @@ class SosApiClient(
         relayId: String?,
         relayReceivedAt: Long?,
     ): String {
-        val packet = buildString {
-            append("{")
-            append("\"v\":").append(Canonical.SCHEMA_VERSION)
-            append(",\"event_id\":").append(quote(event.eventId))
-            append(",\"rider_id\":").append(quote(event.riderId))
-            append(",\"created_at\":").append(event.createdAt)
-            append(",\"lat\":").append(coord(event.lat))
-            append(",\"lng\":").append(coord(event.lng))
-            append(",\"acc_m\":").append(event.accuracyMetres?.toString() ?: "null")
-            append(",\"conf\":").append(event.confidence)
-            append(",\"trigger\":[")
-            append(event.triggers.sorted().joinToString(",") { quote(it) })
-            append("]")
-            // Never omitted, and never inferred by the receiver.
-            append(",\"simulated\":").append(event.simulated)
-            append(",\"sig\":").append(event.signature?.let { quote(it) } ?: "null")
-            append("}")
-        }
+        // Exactly the bytes a relay would have carried over GATT. Sharing the
+        // codec is what makes a relayed emergency and a directly-uploaded one
+        // byte-identical, and therefore verifiable against the same signature.
+        val packet = SosPacketCodec.encode(event)
 
         val delivery = buildString {
             append("{\"path\":").append(quote(via.wireName))
@@ -164,14 +147,6 @@ class SosApiClient(
         }
 
         return "{\"packet\":$packet,\"delivery\":$delivery}"
-    }
-
-    private fun coord(value: Double?): String {
-        if (value == null) return "null"
-        val rounded = BigDecimal(value).setScale(7, RoundingMode.HALF_EVEN)
-        val text = rounded.toPlainString()
-        val isNegativeZero = rounded.signum() == 0 && (value < 0.0 || 1.0 / value < 0.0)
-        return if (isNegativeZero) "-$text" else text
     }
 
     private fun quote(value: String): String {

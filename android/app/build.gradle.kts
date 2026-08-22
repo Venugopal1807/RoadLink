@@ -50,6 +50,9 @@ android {
     sourceSets["main"].java.srcDirs("src/main/kotlin")
     sourceSets["test"].java.srcDirs("src/test/kotlin")
     sourceSets["androidTest"].java.srcDirs("src/androidTest/kotlin")
+    // Exported Room schemas are shipped into the test APK so MigrationTestHelper
+    // can build a real v1 database and migrate it forward.
+    sourceSets["androidTest"].assets.srcDirs("$projectDir/schemas")
 
     buildFeatures {
         buildConfig = true
@@ -77,6 +80,29 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+/**
+ * Room 2.8's MigrationTestHelper reads the exported schema with
+ * kotlinx-serialization. On the androidTest classpath a BOM pins
+ * serialization-core to 1.7.3 while room-testing pulls serialization-json
+ * 1.8.1, and 1.8.1's generated serializers call a method that core 1.7.3 does
+ * not declare - which surfaces only at runtime as:
+ *
+ *   AbstractMethodError: GeneratedSerializer.typeParametersSerializers()
+ *
+ * Forcing the pair to the same version is the fix. Scoped to androidTest so
+ * the shipped app's resolution is untouched.
+ */
+configurations.configureEach {
+    if (name.contains("AndroidTest", ignoreCase = true)) {
+        resolutionStrategy.force(
+            "org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.1",
+            "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.1",
+            "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1",
+            "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.1",
+        )
+    }
+}
+
 dependencies {
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)
@@ -97,6 +123,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.json)
 
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.coroutines.test)

@@ -42,6 +42,10 @@ data class EmergencyEventEntity(
     val attemptCount: Int,
     val lastAttemptAt: Long?,
     val lastError: String?,
+    // Added in schema v2 for the BLE relay path.
+    val relayedTo: String? = null,
+    val relayedAt: Long? = null,
+    val collectedAsRelay: Boolean = false,
 )
 
 @Entity(
@@ -77,6 +81,9 @@ fun EmergencyEvent.toEntity(): EmergencyEventEntity = EmergencyEventEntity(
     attemptCount = attemptCount,
     lastAttemptAt = lastAttemptAt,
     lastError = lastError,
+    relayedTo = relayedTo,
+    relayedAt = relayedAt,
+    collectedAsRelay = collectedAsRelay,
 )
 
 fun EmergencyEventEntity.toDomain(): EmergencyEvent = EmergencyEvent(
@@ -99,6 +106,9 @@ fun EmergencyEventEntity.toDomain(): EmergencyEvent = EmergencyEvent(
     attemptCount = attemptCount,
     lastAttemptAt = lastAttemptAt,
     lastError = lastError,
+    relayedTo = relayedTo,
+    relayedAt = relayedAt,
+    collectedAsRelay = collectedAsRelay,
 )
 
 fun DeliveryAttempt.toEntity(): DeliveryAttemptEntity = DeliveryAttemptEntity(

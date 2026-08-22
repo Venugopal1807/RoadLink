@@ -2,11 +2,13 @@ package com.roadlink
 
 import android.app.Application
 import android.content.Context
+import com.roadlink.ble.BleCapability
 import com.roadlink.data.EmergencyDatabase
 import com.roadlink.data.RoomEmergencyStore
 import com.roadlink.delivery.BleRelayTransport
 import com.roadlink.delivery.DeliveryManager
 import com.roadlink.delivery.DirectNetworkTransport
+import com.roadlink.delivery.RelayCoordinator
 import com.roadlink.delivery.SimulatedRelayTransport
 import com.roadlink.delivery.Transport
 import com.roadlink.domain.Clock
@@ -45,6 +47,8 @@ class RoadLinkApp : Application() {
 
 class AppContainer(context: Context) {
 
+    private val appContext: Context = context.applicationContext
+
     val scope = CoroutineScope(SupervisorJob())
 
     /** Rolling in-app log. Every line states REAL or SIMULATED explicitly. */
@@ -75,22 +79,29 @@ class AppContainer(context: Context) {
 
     // ---- transports, in priority order ------------------------------------
     //
-    // BLE first because a nearby relay works where the network does not.
-    // Simulated relay second, standing in for the second phone until it can be
-    // validated. Direct network last: most reliable when it exists, but it is
-    // exactly the thing a crashed rider may not have.
+    // Direct network FIRST. When the rider can reach the backend, that is both
+    // the fastest and the most certain path, and a relay adds nothing. Its
+    // availability check is a cheap connectivity read, so when the rider is
+    // offline the cascade falls straight through.
+    //
+    // BLE relay SECOND: it exists precisely for the case direct upload cannot
+    // handle, which is the rider having no connectivity at all.
+    //
+    // Simulated relay LAST, so it can never pre-empt a real path. It stands in
+    // for a second phone during development and nothing more.
+
+    val directNetwork = DirectNetworkTransport(api, connectivity) { append(it) }
 
     val bleRelay = BleRelayTransport(
         context = context,
         // Stays false until S0-S5 pass on real hardware. See docs/s0-s5-runbook.md.
         enabled = false,
+        log = ::append,
     )
 
     val simulatedRelay = SimulatedRelayTransport(api, clock) { append(it) }
 
-    val directNetwork = DirectNetworkTransport(api, connectivity) { append(it) }
-
-    val transports: List<Transport> = listOf(bleRelay, simulatedRelay, directNetwork)
+    val transports: List<Transport> = listOf(directNetwork, bleRelay, simulatedRelay)
 
     val deliveryManager = DeliveryManager(
         store = store,
@@ -110,6 +121,22 @@ class AppContainer(context: Context) {
 
     /** DEVELOPMENT ONLY. Backs the CREATE TEST SOS action. */
     val testCrashDetector = TestCrashDetector()
+
+    /**
+     * The relay (Phone B) role. Off by default - a phone only carries other
+     * people's emergencies when its owner opts in.
+     */
+    val relayCoordinator = RelayCoordinator(
+        context = context,
+        store = store,
+        deliveryManager = deliveryManager,
+        scope = scope,
+        relayId = "rl_relay_" + riderId.removePrefix("rl_").take(6),
+        clock = clock,
+        log = ::append,
+    )
+
+    fun bleCapability(): BleCapability = BleCapability.probe(appContext)
 
     fun logLine(line: String) = append(line)
 

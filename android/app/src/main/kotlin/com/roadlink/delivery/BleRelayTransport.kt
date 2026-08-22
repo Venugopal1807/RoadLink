@@ -1,93 +1,59 @@
 package com.roadlink.delivery
 
-import android.annotation.SuppressLint
-import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
+import com.roadlink.ble.BleCapability
+import com.roadlink.ble.BlePeripheral
+import com.roadlink.domain.DeliveryState
 import com.roadlink.domain.EmergencyEvent
 import com.roadlink.domain.TransportKind
 
 /**
- * Phone-to-phone BLE relay.
+ * Phone-to-phone BLE relay, rider side.
  *
- * STATUS: NOT VALIDATED ON PHYSICAL HARDWARE.
+ * Advertises the emergency as a beacon, serves the signed packet over GATT to
+ * whichever relay connects, and waits for that relay's acknowledgement. The
+ * radio work lives entirely in [BlePeripheral]; this class only adapts it to
+ * the [Transport] contract, so nothing above this file sees a Bluetooth type.
  *
- * This class is deliberately real but disarmed. It performs the genuine
- * capability probe - the same `getBluetoothLeAdvertiser() != null` gate the
- * spike's S0 step turns on - and reports honestly what this device can and
- * cannot do. What it does not yet do is move packets, because the working
- * radio code lives in :spike-ble and has never been executed on a phone.
+ * ## Status: NOT VALIDATED ON PHYSICAL HARDWARE
  *
- * The gate is [enabled], which stays false until S0-S5 have actually passed on
- * two physical devices. Flipping it on before that would mean the app silently
- * preferring an unproven path over one that works.
+ * [enabled] is false by default and must stay false until the S0-S5 ladder in
+ * docs/s0-s5-runbook.md has been observed passing on two real phones. The
+ * decisive unknown is whether `getBluetoothLeAdvertiser()` is non-null on the
+ * actual handsets - central-only Android devices exist, and on those this
+ * topology is impossible rather than merely slow.
  *
- * Tomorrow's integration is intended to be exactly this: lift the peripheral
- * and central roles from :spike-ble behind [deliver], flip [enabled], and
- * change nothing else. Nothing above this file imports a Bluetooth class, so
- * no caller has to change.
+ * Until then this transport reports itself unavailable, and the offline queue
+ * plus direct upload remains the product's proven path.
  */
-@SuppressLint("MissingPermission")
 class BleRelayTransport(
     private val context: Context,
     /**
-     * Master switch. FALSE until the S0-S5 ladder has been observed passing on
-     * real hardware. See docs/s0-s5-runbook.md.
+     * Master switch. Turn on only after S0 reports CAN ADVERTISE on the
+     * device taking the rider role.
      */
-    var enabled: Boolean = false,
+    @Volatile var enabled: Boolean = false,
+    /**
+     * How long to advertise before giving up on this pass.
+     *
+     * Bounded rather than indefinite because a delivery pass must stay free to
+     * try other transports. A timeout is not a failure of the emergency: the
+     * event stays queued and is offered again next pass.
+     */
+    @Volatile var offerTimeoutMs: Long = 20_000L,
+    private val log: (String) -> Unit = {},
 ) : Transport {
 
     override val kind: TransportKind = TransportKind.BLE_RELAY
 
-    /**
-     * What this specific device's radio can actually do.
-     *
-     * `canAdvertise` is the decisive value for the whole RoadLink topology:
-     * the rider's phone has to take the BLE peripheral role, and
-     * getBluetoothLeAdvertiser() returns null on chipsets that have no LE
-     * peripheral role at all. Central-only Android devices exist.
-     */
-    data class Capability(
-        val hasBleFeature: Boolean,
-        val adapterPresent: Boolean,
-        val adapterEnabled: Boolean,
-        val canAdvertise: Boolean,
-        val deviceModel: String,
-        val apiLevel: Int,
-    ) {
-        val canBePeripheral: Boolean get() = adapterEnabled && canAdvertise
+    private val peripheral by lazy { BlePeripheral(context, log) }
 
-        /** Human-readable reason this device cannot relay, or null if it could. */
-        val blocker: String?
-            get() = when {
-                !hasBleFeature -> "device has no Bluetooth LE"
-                !adapterPresent -> "no Bluetooth adapter"
-                !adapterEnabled -> "Bluetooth is off"
-                !canAdvertise -> "chipset has no LE peripheral role (cannot advertise)"
-                else -> null
-            }
-    }
-
-    fun probe(): Capability {
-        val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        val adapter = manager?.adapter
-        return Capability(
-            hasBleFeature = context.packageManager
-                .hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE),
-            adapterPresent = adapter != null,
-            adapterEnabled = adapter?.isEnabled == true,
-            // The gate. Null here means no peripheral role on this hardware.
-            canAdvertise = runCatching { adapter?.bluetoothLeAdvertiser != null }.getOrDefault(false),
-            deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
-            apiLevel = Build.VERSION.SDK_INT,
-        )
-    }
+    fun probe(): BleCapability = BleCapability.probe(context)
 
     /**
-     * Always false until [enabled] is turned on after hardware validation.
-     * Reporting availability we have not proven would let the manager waste
-     * the only delivery window on a path that has never moved a byte.
+     * Cheap and side-effect free: no radio work, just a capability read.
+     * Reports false while disabled so the manager never spends a delivery
+     * window on a path that has never moved a byte.
      */
     override suspend fun isAvailable(): Boolean {
         if (!enabled) return false
@@ -97,17 +63,39 @@ class BleRelayTransport(
     override suspend fun deliver(event: EmergencyEvent): TransportResult {
         if (!enabled) {
             return TransportResult.Unavailable(
-                "BLE transport disabled pending S0-S5 physical-device validation"
+                "BLE transport disabled pending S0-S5 physical validation"
             )
         }
-        val capability = probe()
-        capability.blocker?.let { return TransportResult.Unavailable(it) }
 
-        // Reached only once `enabled` is true, which requires hardware
-        // validation to have passed first. The radio implementation is lifted
-        // from :spike-ble at that point.
-        return TransportResult.Unavailable(
-            "BLE relay not yet wired to the radio layer; run docs/s0-s5-runbook.md first"
-        )
+        // Already handed to a relay: do not spend another advertising window on
+        // it. Let the cascade fall through so the rider's own network can still
+        // deliver it directly if that becomes possible.
+        if (event.state == DeliveryState.RELAYED) {
+            return TransportResult.Unavailable(
+                "already handed to relay ${event.relayedTo ?: "unknown"}"
+            )
+        }
+
+        val capability = probe()
+        capability.peripheralBlocker?.let { return TransportResult.Unavailable(it) }
+
+        return when (val outcome = peripheral.offerEvent(event, offerTimeoutMs)) {
+            is BlePeripheral.Outcome.Acked -> TransportResult.HandedOff(
+                relayId = outcome.relayId,
+                detail = "relay ${outcome.relayId} acknowledged over BLE after ${outcome.elapsedMs}ms",
+            )
+
+            // Nobody was in range. Entirely ordinary; the emergency waits.
+            is BlePeripheral.Outcome.NotCollected -> TransportResult.Failed(
+                "no relay collected the emergency within ${outcome.waitedMs}ms"
+            )
+
+            is BlePeripheral.Outcome.Unavailable -> TransportResult.Unavailable(outcome.reason)
+
+            is BlePeripheral.Outcome.Failed -> TransportResult.Failed(outcome.reason)
+        }
     }
+
+    /** Stop advertising immediately, e.g. when the user leaves relay/rider mode. */
+    fun stop() = peripheral.stop()
 }

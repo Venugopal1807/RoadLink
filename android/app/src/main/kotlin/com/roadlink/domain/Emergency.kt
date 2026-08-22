@@ -98,6 +98,18 @@ enum class DeliveryState {
     /** A transport is actively working on this event right now. */
     DELIVERY_ATTEMPT,
 
+    /**
+     * A relay took custody and acknowledged it. NOT delivered.
+     *
+     * This state exists because conflating "a nearby phone has it" with "the
+     * backend has it" would be a false claim: the relay may never regain
+     * connectivity. So RELAYED is explicitly still pending - the rider keeps
+     * trying to deliver independently, which is safe precisely because the
+     * backend is idempotent on event_id. Two independent holders is the
+     * intended design, not a duplicate to be suppressed.
+     */
+    RELAYED,
+
     /** The backend has acknowledged the event. Terminal, and the only terminal state. */
     DELIVERED,
     ;
@@ -118,7 +130,10 @@ enum class DeliveryState {
             // DELIVERY_ATTEMPT -> QUEUED_OFFLINE is the failure path, and it is
             // the reason no failure is ever terminal.
             QUEUED_OFFLINE to setOf(DELIVERY_ATTEMPT),
-            DELIVERY_ATTEMPT to setOf(DELIVERED, QUEUED_OFFLINE),
+            DELIVERY_ATTEMPT to setOf(DELIVERED, RELAYED, QUEUED_OFFLINE),
+            // A relayed emergency can still be delivered directly by the rider
+            // later. It is never a dead end.
+            RELAYED to setOf(DELIVERY_ATTEMPT),
             DELIVERED to emptySet(),
         )
 
@@ -163,6 +178,17 @@ data class EmergencyEvent(
     val attemptCount: Int = 0,
     val lastAttemptAt: Long? = null,
     val lastError: String? = null,
+
+    /** Set when a relay took custody over BLE. Not proof of backend delivery. */
+    val relayedTo: String? = null,
+    val relayedAt: Long? = null,
+
+    /**
+     * True when this device is holding SOMEONE ELSE'S emergency, collected over
+     * BLE while acting as a relay. The responder must never see a relay's copy
+     * presented as the relay operator's own crash.
+     */
+    val collectedAsRelay: Boolean = false,
 ) {
     init {
         require(confidence in 0..100) { "confidence out of range: $confidence" }
@@ -197,6 +223,7 @@ data class EmergencyEvent(
                 TransportKind.SIMULATED_RELAY -> "SIMULATED_RELAYING"
                 null -> "DELIVERING"
             }
+            DeliveryState.RELAYED -> "RELAYED"
             DeliveryState.DELIVERED -> "DELIVERED"
         }
 
@@ -212,6 +239,7 @@ data class EmergencyEvent(
         transport: TransportKind? = null,
         at: Long,
         error: String? = null,
+        relayId: String? = null,
     ): EmergencyEvent {
         if (!DeliveryState.canMove(state, target)) {
             throw IllegalTransitionException(state, target)
@@ -231,6 +259,13 @@ data class EmergencyEvent(
                 deliveredAt = at,
                 lastError = null,
             )
+            DeliveryState.RELAYED -> copy(
+                state = target,
+                activeTransport = null,
+                relayedTo = relayId ?: relayedTo,
+                relayedAt = at,
+                lastError = null,
+            )
             DeliveryState.QUEUED_OFFLINE -> copy(
                 state = target,
                 activeTransport = null,
@@ -244,7 +279,16 @@ data class EmergencyEvent(
 // ----------------------------------------------------------------- attempt
 
 /** Why a delivery attempt ended. */
-enum class AttemptOutcome { SUCCESS, FAILED, UNAVAILABLE }
+enum class AttemptOutcome {
+    /** The backend confirmed the event. */
+    SUCCESS,
+
+    /** A relay took custody. Progress, but not backend confirmation. */
+    HANDED_OFF,
+
+    FAILED,
+    UNAVAILABLE,
+}
 
 /**
  * One delivery attempt, appended and never modified or removed.

@@ -6,6 +6,7 @@ import com.roadlink.domain.DeliveryAttempt
 import com.roadlink.domain.DeliveryState
 import com.roadlink.domain.EmergencyEvent
 import com.roadlink.domain.EmergencyStore
+import com.roadlink.domain.TransportKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,6 +46,18 @@ class DeliveryManager(
     private val passLock = Mutex()
 
     private var loop: Job? = null
+
+    /**
+     * DEVELOPMENT/DEMO ONLY. When set, only this transport is attempted.
+     *
+     * This exists for one reason: a live demo must be deterministic. Bluetooth,
+     * OEM background execution and conference Wi-Fi all fail unpredictably, and
+     * the audience should see a product rather than a debugging session. Normal
+     * users never see this control - `null` is the real product behaviour,
+     * where every transport is tried in priority order.
+     */
+    @Volatile
+    var forcedTransport: TransportKind? = null
 
     data class PassResult(
         val considered: Int = 0,
@@ -113,7 +126,13 @@ class DeliveryManager(
 
         var current = event
 
-        for (transport in transports) {
+        // A forced transport narrows the cascade but changes nothing else:
+        // same state machine, same persistence, same audit trail.
+        val candidates = forcedTransport
+            ?.let { forced -> transports.filter { it.kind == forced } }
+            ?: transports
+
+        for (transport in candidates) {
             val available = runCatching { transport.isAvailable() }.getOrElse { error ->
                 log("${transport.kind.label} availability check threw: ${error.message}")
                 false
@@ -146,6 +165,25 @@ class DeliveryManager(
                     )
                     store.update(current)
                     log("DELIVERED ${current.eventId.take(8)} via ${transport.kind.label}" + if (result.duplicate) " (backend reported duplicate)" else "")
+                    return current
+                }
+
+                is TransportResult.HandedOff -> {
+                    recordAttempt(
+                        current, transport, AttemptOutcome.HANDED_OFF,
+                        result.detail ?: "relay ${result.relayId} took custody",
+                    )
+                    current = current.transitionTo(
+                        DeliveryState.RELAYED,
+                        transport = transport.kind,
+                        at = clock.now(),
+                        relayId = result.relayId,
+                    )
+                    store.update(current)
+                    log("RELAYED ${current.eventId.take(8)} to ${result.relayId} via ${transport.kind.label} - NOT yet confirmed at the backend")
+                    // Real progress, so stop the cascade here. The event stays
+                    // pending and will be retried, which is how the rider still
+                    // delivers directly if its own network returns.
                     return current
                 }
 
@@ -197,12 +235,15 @@ class DeliveryManager(
             .getOrElse { TransportResult.Failed(it.message ?: it.javaClass.simpleName) }
         val outcome = when (result) {
             is TransportResult.Delivered -> AttemptOutcome.SUCCESS
+            is TransportResult.HandedOff -> AttemptOutcome.HANDED_OFF
             is TransportResult.Failed -> AttemptOutcome.FAILED
             is TransportResult.Unavailable -> AttemptOutcome.UNAVAILABLE
         }
         val detail = when (result) {
             is TransportResult.Delivered ->
                 (result.detail ?: "redelivered") + if (result.duplicate) " duplicate=true" else ""
+            is TransportResult.HandedOff ->
+                result.detail ?: "relay ${result.relayId} took custody"
             is TransportResult.Failed -> result.reason
             is TransportResult.Unavailable -> result.reason
         }

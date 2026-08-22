@@ -22,12 +22,13 @@ mechanism that extends delivery when another phone is nearby.
 |---|---|---|
 | Backend ingestion + idempotency | Working | 61/61 assertions over real HTTP |
 | Kotlin ↔ Python packet signing | Working | `sig_valid=true` on a live server |
-| Local persistence (Room) | Working | 6/6 durability tests on an Android runtime *(emulated)* |
+| Local persistence (Room) | Working | 8/8 durability + migration tests on an Android runtime *(emulated)* |
 | Delivery state machine | Working | Scenarios A–E unit tested |
 | Simulated relay transport | Working | Scenario A observed end to end *(emulated)* |
 | Direct network transport | Working | Scenario B observed end to end *(emulated)* |
 | Responder interface | Working | Reads the backend, not local state |
-| **Phone-to-phone BLE** | **NOT VALIDATED** | **No RoadLink BLE code has ever run on a radio** |
+| BLE protocol codecs | Working | Beacon/ACK/packet round trip + tamper rejection, 15 JVM tests |
+| **Phone-to-phone BLE transport** | **NOT VALIDATED** | **No RoadLink BLE code has ever run on a radio** |
 | Crash detection (sensor) | Not started | Trigger interface exists; `TestCrashDetector` only |
 
 Full results, including what each run does *not* prove:
@@ -42,11 +43,22 @@ is the entire product claim.
 ### What is honestly unproven
 
 No number, log line or screenshot this build produces is evidence that
-phone-to-phone BLE works. `BleRelayTransport.enabled` is `false`. The decisive
+phone-to-phone BLE works. `BleRelayTransport.enabled` is `false`, so the
+transport reports itself unavailable on every delivery pass. The decisive
 question — whether `getBluetoothLeAdvertiser()` returns non-null on the actual
 handsets, i.e. whether an Android phone can take the BLE peripheral role at all
-— is unanswered and can only be answered by `docs/s0-s5-runbook.md` on two
-physical devices.
+— is unanswered. The procedure that answers it is
+[`docs/physical-ble-procedure.md`](docs/physical-ble-procedure.md), and every
+result cell in it is deliberately empty.
+
+### The claim, as currently supported
+
+> RoadLink preserves an emergency locally when connectivity fails and delivers
+> it automatically when a viable communication path becomes available.
+
+That is demonstrated. What is **not** claimed, and will not be until measured:
+guaranteed delivery, guaranteed rescue, works on every Android phone, works
+without any network anywhere.
 
 ---
 
@@ -61,9 +73,9 @@ EmergencyController ── signs the packet, generates the event_id
       ▼
 DeliveryManager ───── owns EVERY state change
       │
-      ├── BleRelayTransport        real, currently disarmed
-      ├── SimulatedRelayTransport  development only
-      └── DirectNetworkTransport   real
+      ├── DirectNetworkTransport   real, tried first when the rider is online
+      ├── BleRelayTransport        real, DISARMED pending hardware validation
+      └── SimulatedRelayTransport  development only, never pre-empts a real path
                  │
                  ▼
             FastAPI backend ── idempotent on event_id
@@ -71,6 +83,16 @@ DeliveryManager ───── owns EVERY state change
                  ▼
             Responder view
 ```
+
+The relay role (Phone B) is not a second implementation. `RelayCoordinator`
+collects a foreign emergency over BLE and stores it; from that point it is
+carried by the same `DeliveryManager` loop and the same `DirectNetworkTransport`
+as one of the device's own. A relay is a role a phone plays, not a mode of the
+product.
+
+A relay's acknowledgement produces the state `RELAYED`, **not** `DELIVERED`.
+Custody is not arrival — the relay may never regain connectivity — so the rider
+keeps trying independently, which is safe because the backend is idempotent.
 
 Nothing above `delivery/Transport.kt` imports a Bluetooth class, so the BLE
 implementation is replaceable without touching the domain, the store or the UI.

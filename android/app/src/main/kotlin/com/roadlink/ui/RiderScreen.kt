@@ -22,11 +22,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.roadlink.domain.DeliveryState
 import com.roadlink.domain.EmergencyEvent
+import com.roadlink.domain.TransportKind
 
 /**
  * The rider's device view: what this phone is holding, and the controls that
@@ -42,6 +44,11 @@ fun RiderScreen(vm: RoadLinkViewModel) {
     val forcedOffline by vm.forcedOffline.collectAsState()
     val failures by vm.scriptedFailures.collectAsState()
     val bleCapability by vm.bleCapability.collectAsState()
+    val bleEnabled by vm.bleEnabled.collectAsState()
+    val relayActive by vm.relayActive.collectAsState()
+    val relayStatus by vm.relayStatus.collectAsState()
+    val relayCollected by vm.relayCollected.collectAsState()
+    val forced by vm.forcedTransport.collectAsState()
 
     LazyColumn(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -134,7 +141,42 @@ fun RiderScreen(vm: RoadLinkViewModel) {
         }
 
         item {
-            SectionLabel("BLE relay status")
+            SectionLabel("Delivery path (demo control)")
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        "Pin delivery to one transport so a live demonstration is deterministic. " +
+                            "AUTO is the real product behaviour.",
+                        fontSize = 10.sp, color = RlSlate,
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        TransportChoice("AUTO", forced == null, RlSlate, Modifier.weight(1f)) {
+                            vm.setForcedTransport(null)
+                        }
+                        TransportChoice(
+                            "BLE", forced == TransportKind.BLE_RELAY, RlBlue, Modifier.weight(1f)
+                        ) { vm.setForcedTransport(TransportKind.BLE_RELAY) }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        TransportChoice(
+                            "SIMULATED", forced == TransportKind.SIMULATED_RELAY, RlViolet, Modifier.weight(1f)
+                        ) { vm.setForcedTransport(TransportKind.SIMULATED_RELAY) }
+                        TransportChoice(
+                            "NETWORK", forced == TransportKind.DIRECT_NETWORK, RlGreen, Modifier.weight(1f)
+                        ) { vm.setForcedTransport(TransportKind.DIRECT_NETWORK) }
+                    }
+                }
+            }
+        }
+
+        item {
+            SectionLabel("Physical BLE  ·  S0 capability gate")
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.padding(12.dp)) {
                     Row(
@@ -143,33 +185,88 @@ fun RiderScreen(vm: RoadLinkViewModel) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("BLE transport", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        StatusChip("NOT VALIDATED", RlOrange)
+                        StatusChip(
+                            if (bleEnabled) "ARMED" else "NOT VALIDATED",
+                            if (bleEnabled) RlBlue else RlOrange,
+                        )
                     }
                     Text(
-                        "Disabled until the S0-S5 ladder passes on two physical phones. " +
-                            "No BLE claim in this build is backed by hardware evidence.",
-                        fontSize = 10.sp, color = RlSlate,
+                        if (bleEnabled) {
+                            "Armed. Deliveries over this path are PHYSICAL BLE and count as evidence."
+                        } else {
+                            "Disarmed until S0-S5 pass on two physical phones. No BLE claim in " +
+                                "this build is backed by hardware evidence yet."
+                        },
+                        fontSize = 10.sp,
+                        color = if (bleEnabled) RlBlue else RlSlate,
                         modifier = Modifier.padding(vertical = 6.dp),
                     )
+
                     bleCapability?.let { cap ->
                         HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        InfoRow("Device", cap.deviceModel)
-                        InfoRow("API level", cap.apiLevel.toString())
+                        InfoRow("Device", "${cap.manufacturer} ${cap.deviceModel}")
+                        InfoRow("Android", "${cap.androidRelease} (API ${cap.apiLevel})")
                         InfoRow("BLE feature", cap.hasBleFeature.toString())
                         InfoRow("Adapter enabled", cap.adapterEnabled.toString())
                         InfoRow(
-                            "CAN ADVERTISE",
-                            cap.canAdvertise.toString(),
+                            cap.advertiseVerdict,
+                            if (cap.canAdvertise) "yes" else "no",
                             valueColor = if (cap.canAdvertise) RlGreen else RlRed,
                         )
-                        cap.blocker?.let {
+                        InfoRow("Scanner", if (cap.scannerAvailable) "available" else "absent")
+                        InfoRow("Extended adv", cap.extendedAdvertisingSupported.toString())
+                        InfoRow("LE 2M PHY", cap.le2MPhySupported.toString())
+                        InfoRow("Max adv data", "${cap.maxAdvertisingDataLength} B")
+                        cap.peripheralBlocker?.let {
                             Text(it, fontSize = 11.sp, color = RlRed, modifier = Modifier.padding(top = 4.dp))
                         }
                     }
+
                     OutlinedButton(
                         onClick = { vm.probeBle() },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    ) { Text("Probe this device's radio", fontSize = 12.sp) }
+                    ) { Text("Run S0 probe on this device", fontSize = 12.sp) }
+
+                    SwitchRow(
+                        label = "Arm physical BLE transport",
+                        detail = "turn on only after S0 reports CAN ADVERTISE",
+                        checked = bleEnabled,
+                        onChange = vm::setBleEnabled,
+                    )
+                }
+            }
+        }
+
+        item {
+            SectionLabel("Relay mode  ·  act as Phone B")
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Column(Modifier.padding(12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Carry emergencies for riders nearby", fontSize = 12.sp)
+                        StatusChip(relayStatus.uppercase(), if (relayActive) RlBlue else RlSlate)
+                    }
+                    Text(
+                        "A collected emergency is stored here and then uploaded by the same " +
+                            "delivery loop as this phone's own. Nothing is acknowledged to the " +
+                            "rider until it is safely on disk.",
+                        fontSize = 10.sp, color = RlSlate,
+                        modifier = Modifier.padding(vertical = 6.dp),
+                    )
+                    InfoRow("Collected this session", relayCollected.toString())
+                    SwitchRow(
+                        label = "Relay mode",
+                        detail = "scan for riders and take custody of their emergencies",
+                        checked = relayActive,
+                        onChange = vm::setRelayMode,
+                    )
+                    OutlinedButton(
+                        onClick = { vm.forgetRelayCollected() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Forget collected (repeatability run)", fontSize = 11.sp) }
                 }
             }
         }
@@ -189,6 +286,28 @@ fun RiderScreen(vm: RoadLinkViewModel) {
         }
 
         item { Text("", Modifier.height(24.dp)) }
+    }
+}
+
+/** A single option in the demo transport selector. */
+@Composable
+private fun TransportChoice(
+    label: String,
+    selected: Boolean,
+    color: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            modifier = modifier,
+            colors = ButtonDefaults.buttonColors(containerColor = color),
+        ) { Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = modifier) {
+            Text(label, fontSize = 11.sp, color = RlSlate)
+        }
     }
 }
 
@@ -234,9 +353,18 @@ private fun LocalEventCard(
                     fontSize = 13.sp,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Someone else's emergency that this phone is carrying.
+                    if (event.collectedAsRelay) StatusChip("CARRYING", RlBlue)
                     FidelityBadge(event.simulated)
                     StatusChip(event.statusLabel)
                 }
+            }
+            if (event.collectedAsRelay) {
+                Text(
+                    "Collected over BLE from rider ${event.riderId}. This phone is acting as a relay.",
+                    fontSize = 10.sp, color = RlBlue,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
             }
             InfoRow("Created", formatTime(event.createdAt))
             InfoRow("Location", formatLocation(event))
@@ -244,6 +372,17 @@ private fun LocalEventCard(
             InfoRow("Triggers", event.triggers.joinToString(", ").ifBlank { "none" })
             InfoRow("Delivery attempts", "${event.attemptCount} (logged: $attemptCount)")
 
+            event.relayedTo?.let {
+                InfoRow("Handed to relay", it, valueColor = RlAmber)
+            }
+            if (event.state == DeliveryState.RELAYED) {
+                Text(
+                    "A relay has custody. The backend has NOT confirmed it yet, so this phone " +
+                        "keeps trying to deliver independently.",
+                    fontSize = 10.sp, color = RlAmber,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             event.deliveredVia?.let {
                 InfoRow("Delivered via", it.label, valueColor = if (it.isSimulated) RlViolet else RlGreen)
             }

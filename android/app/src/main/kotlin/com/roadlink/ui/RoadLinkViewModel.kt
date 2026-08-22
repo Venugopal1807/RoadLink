@@ -4,9 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.roadlink.AppContainer
-import com.roadlink.delivery.BleRelayTransport
+import com.roadlink.ble.BleCapability
 import com.roadlink.domain.DeliveryAttempt
 import com.roadlink.domain.EmergencyEvent
+import com.roadlink.domain.TransportKind
 import com.roadlink.net.ResponderEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,8 +46,20 @@ class RoadLinkViewModel(private val container: AppContainer) : ViewModel() {
     private val _attempts = MutableStateFlow<Map<String, List<DeliveryAttempt>>>(emptyMap())
     val attempts: StateFlow<Map<String, List<DeliveryAttempt>>> = _attempts.asStateFlow()
 
-    private val _bleCapability = MutableStateFlow<BleRelayTransport.Capability?>(null)
-    val bleCapability: StateFlow<BleRelayTransport.Capability?> = _bleCapability.asStateFlow()
+    private val _bleCapability = MutableStateFlow<BleCapability?>(null)
+    val bleCapability: StateFlow<BleCapability?> = _bleCapability.asStateFlow()
+
+    /** Relay (Phone B) role state. */
+    val relayActive: StateFlow<Boolean> = container.relayCoordinator.active
+    val relayStatus: StateFlow<String> = container.relayCoordinator.status
+    val relayCollected: StateFlow<Int> = container.relayCoordinator.collectedCount
+
+    private val _bleEnabled = MutableStateFlow(container.bleRelay.enabled)
+    val bleEnabled: StateFlow<Boolean> = _bleEnabled.asStateFlow()
+
+    /** DEMO ONLY. null = normal product behaviour, every transport in priority order. */
+    private val _forcedTransport = MutableStateFlow<TransportKind?>(null)
+    val forcedTransport: StateFlow<TransportKind?> = _forcedTransport.asStateFlow()
 
     // ---- development switches, surfaced directly in the UI -----------------
 
@@ -146,13 +159,53 @@ class RoadLinkViewModel(private val container: AppContainer) : ViewModel() {
         container.logLine("simulator script reset")
     }
 
+    /**
+     * The S0 capability probe, in the product.
+     *
+     * Logs the full report verbatim so the result can be copied straight into
+     * docs/verification-log.md rather than retyped from memory.
+     */
     fun probeBle() = launchBusy {
-        val capability = container.bleRelay.probe()
+        val capability = container.bleCapability()
         _bleCapability.value = capability
+        container.logLine("S0 capability probe:\n${capability.render()}")
+    }
+
+    /**
+     * Arm the physical BLE transport. Intended to be turned on only after S0
+     * reports CAN ADVERTISE on this device.
+     */
+    fun setBleEnabled(value: Boolean) {
+        container.bleRelay.enabled = value
+        _bleEnabled.value = value
         container.logLine(
-            "BLE probe on ${capability.deviceModel} (API ${capability.apiLevel}): " +
-                "canAdvertise=${capability.canAdvertise} " +
-                (capability.blocker?.let { "blocker=$it" } ?: "peripheral role available")
+            if (value) "PHYSICAL BLE transport ARMED - results from here are physical, not simulated"
+            else "PHYSICAL BLE transport disarmed"
+        )
+    }
+
+    /** Turn this phone into a relay for riders nearby. */
+    fun setRelayMode(value: Boolean) {
+        if (value) {
+            val error = container.relayCoordinator.start()
+            if (error != null) container.logLine("relay mode could not start: $error")
+        } else {
+            container.relayCoordinator.stop()
+        }
+    }
+
+    fun forgetRelayCollected() = container.relayCoordinator.forgetCollected()
+
+    /**
+     * DEMO ONLY. Pin delivery to a single transport so a live demonstration is
+     * deterministic. null restores normal product behaviour.
+     */
+    fun setForcedTransport(kind: TransportKind?) {
+        container.deliveryManager.forcedTransport = kind
+        _forcedTransport.value = kind
+        container.logLine(
+            kind?.let { "delivery pinned to ${it.label} (${it.fidelity}) for demo determinism" }
+                ?: "delivery restored to automatic transport selection"
         )
     }
 

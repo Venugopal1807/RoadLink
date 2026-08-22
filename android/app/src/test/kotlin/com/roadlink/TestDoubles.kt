@@ -112,6 +112,13 @@ class ScriptedTransport(
         fun unavailable(kind: TransportKind, journal: MutableList<String>) =
             ScriptedTransport(kind, journal, available = false)
 
+        /** A relay takes custody but the backend has not seen the event. */
+        fun handsOff(kind: TransportKind, journal: MutableList<String>, relayId: String = "rl_relay_x") =
+            ScriptedTransport(
+                kind, journal,
+                results = mutableListOf(TransportResult.HandedOff(relayId)),
+            )
+
         /** Fails [times] times, then delivers forever after. */
         fun failsThenDelivers(kind: TransportKind, journal: MutableList<String>, times: Int) =
             ScriptedTransport(

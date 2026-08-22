@@ -4,11 +4,12 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [EmergencyEventEntity::class, DeliveryAttemptEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class EmergencyDatabase : RoomDatabase() {
@@ -17,6 +18,23 @@ abstract class EmergencyDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "roadlink.db"
+
+        /**
+         * v1 -> v2: fields for the BLE relay path.
+         *
+         * A real migration rather than a destructive fallback. Dropping the
+         * table on a schema change would silently discard undelivered
+         * emergencies, which is the exact loss this product exists to prevent.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE emergency_events ADD COLUMN relayedTo TEXT")
+                db.execSQL("ALTER TABLE emergency_events ADD COLUMN relayedAt INTEGER")
+                db.execSQL(
+                    "ALTER TABLE emergency_events ADD COLUMN collectedAsRelay INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
 
         @Volatile
         private var instance: EmergencyDatabase? = null
@@ -33,6 +51,7 @@ abstract class EmergencyDatabase : RoomDatabase() {
                 // silently discarding undelivered emergencies. If a migration
                 // is ever missing we would rather fail loudly at open time
                 // than lose an SOS.
+                .addMigrations(MIGRATION_1_2)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {

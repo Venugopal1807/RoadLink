@@ -45,6 +45,20 @@ sealed interface TransportResult {
         val duplicate: Boolean = false,
     ) : TransportResult
 
+    /**
+     * A relay took custody and acknowledged it, but the backend does NOT have
+     * the event yet.
+     *
+     * Deliberately distinct from [Delivered]. The relay may never regain
+     * connectivity, so reporting this as delivered would claim something no
+     * one has observed. The event stays pending and the rider keeps trying
+     * independently - safe, because the backend is idempotent.
+     */
+    data class HandedOff(
+        val relayId: String,
+        val detail: String? = null,
+    ) : TransportResult
+
     /** This transport could have worked but did not. Retryable. */
     data class Failed(val reason: String) : TransportResult
 

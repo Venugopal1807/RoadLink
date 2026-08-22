@@ -26,6 +26,9 @@ import java.util.Locale
 /** Colour for a delivery status label. Colour is meaning here, not decoration. */
 fun statusColor(label: String): Color = when (label) {
     "DELIVERED" -> RlGreen
+    // Handed to a relay but NOT confirmed at the backend. Deliberately not
+    // green: it is real progress, not arrival.
+    "RELAYED" -> RlAmber
     "QUEUED" -> RlAmber
     "RETRYING" -> RlOrange
     "CONFIRMED" -> RlRed
