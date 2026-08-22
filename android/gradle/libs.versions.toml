@@ -1,17 +1,56 @@
 # Versions pinned to what is ALREADY cached in ~/.gradle on this machine,
-# verified 2026-08-21. Do not bump without checking the cache first - network
-# reachability to Maven has not been confirmed in this environment.
+# verified 2026-08-22. Maven reachability WAS confirmed on 2026-08-22
+# (dl.google.com and repo.maven.apache.org both returned 200), so a controlled
+# download is acceptable now - but staying on cached versions keeps a clean
+# offline build available if the network drops during the demo.
 [versions]
 agp = "8.13.0"
 kotlin = "2.2.21"
+# KSP must match the Kotlin version exactly. 2.2.21-2.0.5 is the published
+# build for Kotlin 2.2.21; a mismatch here fails the build outright.
+ksp = "2.2.21-2.0.5"
+room = "2.8.4"
+coroutines = "1.11.0"
+coreKtx = "1.18.0"
+lifecycle = "2.10.0"
+activityCompose = "1.13.0"
+composeBom = "2026.05.01"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
-# NOTE: [libraries] is intentionally empty.
-# The :spike-ble module has ZERO external dependencies - it uses only the
-# Android framework and the Kotlin stdlib. No AndroidX, no Compose, no
-# coroutines. That keeps the S0-S5 proof of concept buildable offline and
-# removes dependency resolution as a failure mode while we are debugging
-# radio behaviour. Room arrives at S7, once we know the network works.
+[libraries]
+# --- persistence ---------------------------------------------------------
+# Room backs the ONE invariant the product cannot violate: an emergency is
+# durably on disk before any delivery is attempted.
+room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# --- async ---------------------------------------------------------------
+coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+
+# --- android / ui --------------------------------------------------------
+core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+# --- test ----------------------------------------------------------------
+junit = { group = "junit", name = "junit", version = "4.13.2" }
+
+# NOTE: the :spike-ble module still has ZERO external dependencies, on purpose.
+# It is the S0-S5 hardware harness that docs/s0-s5-runbook.md is written
+# against, and it stays dependency-free so a radio problem can never be
+# confused with a dependency-resolution problem. Everything above is for the
+# :app product module only.

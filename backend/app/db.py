@@ -136,7 +136,10 @@ def ingest(packet: dict[str, Any], delivery: dict[str, Any], sig_valid: bool, ph
     event_id = packet["event_id"]
     path = delivery.get("path", "direct")
     relay_id = delivery.get("relay_id")
-    actor = "relay" if path == "ble_relay" else "rider"
+    # Both relay paths are submitted by a relay rather than the rider. The
+    # simulated one keeps its own delivery_path, so the audit trail still
+    # distinguishes a real BLE hop from a simulated one.
+    actor = "relay" if path.endswith("relay") else "rider"
 
     conn = connect()
     try:

@@ -281,6 +281,59 @@ def test_validation() -> None:
     check_eq("unknown event_id -> 404", code, 404)
 
 
+def test_simulated_relay_path() -> None:
+    """A simulated relay delivery must be recorded as its own path.
+
+    The whole point is that it must NOT be recordable as `ble_relay`: the
+    audit trail is what we intend to quote as evidence, and a simulated hop
+    appearing there as a real BLE hop would make that evidence worthless.
+    """
+    print("\n[11] Simulated relay is a distinct, non-BLE delivery path")
+    packet = make_packet()
+    eid = packet["event_id"]
+
+    code, body = submit(packet, "simulated_relay", "rl_sim_relay")
+    check_eq("simulated_relay accepted with 201", code, 201)
+    check_eq("not flagged duplicate", body.get("duplicate"), False)
+
+    _, event = request("GET", f"/api/v1/sos/{eid}")
+    check_eq(
+        "first_delivery_path recorded as simulated_relay",
+        event.get("first_delivery_path"),
+        "simulated_relay",
+    )
+    check("simulated_relay is NOT recorded as ble_relay",
+          event.get("first_delivery_path") != "ble_relay")
+    check_eq("submitted by a relay actor", event["audit"][0]["actor"], "relay")
+    check_eq("audit keeps the simulated path", event["audit"][0]["delivery_path"], "simulated_relay")
+
+    # The rider's own phone later reaches the network and submits directly.
+    code2, body2 = submit(packet, "direct")
+    check_eq("later direct submission is a duplicate", code2, 200)
+    check_eq("duplicate flag set", body2.get("duplicate"), True)
+
+    _, event2 = request("GET", f"/api/v1/sos/{eid}")
+    check_eq("still exactly one event row", event2.get("event_id"), eid)
+    check_eq("two audit rows", len(event2.get("audit", [])), 2)
+    check_eq(
+        "first path is NOT overwritten by the later direct delivery",
+        event2.get("first_delivery_path"),
+        "simulated_relay",
+    )
+    paths = [a["delivery_path"] for a in event2["audit"]]
+    check_eq("audit records both paths distinctly", paths, ["simulated_relay", "direct"])
+
+
+def test_unknown_delivery_path_rejected() -> None:
+    print("\n[12] Unknown delivery paths are rejected, not silently coerced")
+    packet = make_packet()
+    code, _ = request(
+        "POST", "/api/v1/sos",
+        {"packet": packet, "delivery": {"path": "carrier_pigeon"}},
+    )
+    check_eq("unknown path -> 422", code, 422)
+
+
 def test_event_ref() -> None:
     print("\n[10] event_ref matches the BLE beacon reference")
     packet = make_packet()
@@ -333,6 +386,8 @@ def main() -> int:
         test_never_deleted_invariant()
         test_responder_flow()
         test_validation()
+        test_simulated_relay_path()
+        test_unknown_delivery_path_rejected()
         test_event_ref()
     finally:
         proc.terminate()

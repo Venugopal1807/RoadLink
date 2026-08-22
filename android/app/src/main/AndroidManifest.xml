@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ============ network ============ -->
+    <!-- The direct-upload transport, and the relay's forward-to-backend leg. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- ============ BLE, Android 12+ (API 31+) ============ -->
+    <!-- Declared now so the BLE transport can be enabled tomorrow without a
+         manifest change. neverForLocation lets the relay scan without holding
+         ACCESS_FINE_LOCATION; the rider role needs fine location for GPS,
+         which is a separate concern. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- ============ BLE, Android 11 and below (API <= 30) ============ -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- ============ location ============ -->
+    <!-- Declared once, unbounded. The rider role needs a real GPS fix on every
+         API level, and on API <= 30 this same permission is additionally what
+         gates LE scanning. Declaring it twice - once capped at 30 for the scan
+         case and once uncapped for GPS - is a manifest merger error. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Unlike :spike-ble this is required="false". The offline queue plus
+         direct upload is a complete product on a device with no BLE at all;
+         refusing to install there would contradict the core principle that
+         BLE is an enhancement, not the product. -->
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="false" />
+
+    <application
+        android:name=".RoadLinkApp"
+        android:allowBackup="false"
+        android:label="RoadLink"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.RoadLink">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:label="RoadLink"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.RoadLink">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

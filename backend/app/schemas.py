@@ -19,7 +19,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DeliveryPath = Literal["direct", "ble_relay"]
+# "simulated_relay" is a FIRST-CLASS path, not a variant of "ble_relay".
+#
+# While no second physical phone is available, a deterministic in-process relay
+# exercises the same pipeline. Recording those deliveries as "ble_relay" would
+# put fabricated BLE evidence into the audit trail we intend to quote, so the
+# simulator gets its own wire name and the distinction survives all the way to
+# the responder. See docs/decisions/ADR-002-transport-abstraction.md.
+DeliveryPath = Literal["direct", "ble_relay", "simulated_relay"]
 
 
 class SosPacket(BaseModel):
