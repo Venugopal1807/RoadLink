@@ -23,21 +23,10 @@ class SosApiClient(
     private val baseUrl: String,
     private val connectTimeoutMs: Int = 5_000,
     private val readTimeoutMs: Int = 10_000,
-) {
-
-    data class IngestResponse(
-        val httpStatus: Int,
-        val duplicate: Boolean,
-        val sigValid: Boolean,
-        val state: String?,
-        val auditEntries: Int?,
-        val raw: String,
-    ) {
-        val accepted: Boolean get() = httpStatus == 200 || httpStatus == 201
-    }
+) : SosApi {
 
     /** Liveness check. The device uses this to decide whether it is really online. */
-    suspend fun health(): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun health(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val conn = open("/healthz", "GET")
             try {
@@ -55,11 +44,11 @@ class SosApiClient(
      * `simulated_relay`, never `ble_relay` - fabricated BLE evidence in the
      * audit trail would be worse than no evidence at all.
      */
-    suspend fun submit(
+    override suspend fun submit(
         event: EmergencyEvent,
         via: TransportKind,
-        relayId: String? = null,
-        relayReceivedAt: Long? = null,
+        relayId: String?,
+        relayReceivedAt: Long?,
     ): IngestResponse = withContext(Dispatchers.IO) {
         val body = buildEnvelope(event, via, relayId, relayReceivedAt)
         val conn = open("/api/v1/sos", "POST")
