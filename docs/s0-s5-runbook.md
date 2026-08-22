@@ -4,8 +4,13 @@ The same APK installs on both phones. Role is chosen at runtime, so there is no
 "Phone A build" and "Phone B build" to keep straight.
 
 ```
-android/spike-ble/build/outputs/apk/debug/spike-ble-debug.apk   (914 KB)
+android/spike-ble/build/outputs/apk/debug/spike-ble-debug.apk
 ```
+
+This module is deliberately unchanged since the Phase 1 baseline and still has
+zero external dependencies, so a radio problem here can never be confused with
+a dependency-resolution problem. The RoadLink product lives in `:app` and does
+not affect this APK.
 
 ## Build and install
 

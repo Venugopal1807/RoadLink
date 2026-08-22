@@ -48,6 +48,13 @@ compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 
 # --- test ----------------------------------------------------------------
 junit = { group = "junit", name = "junit", version = "4.13.2" }
+# Instrumented tests. These cover the one thing a JVM test cannot: that Room
+# genuinely survives the database being closed and reopened, which is the
+# durability half of "persist before transmit". They run on a device.
+androidx-test-runner = { group = "androidx.test", name = "runner", version = "1.7.0" }
+androidx-test-core = { group = "androidx.test", name = "core", version = "1.7.0" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version = "1.2.1" }
+room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 
 # NOTE: the :spike-ble module still has ZERO external dependencies, on purpose.
 # It is the S0-S5 hardware harness that docs/s0-s5-runbook.md is written
