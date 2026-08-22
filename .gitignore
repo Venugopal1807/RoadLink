@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Spike database
+*.db
+*.db-wal
+*.db-shm
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,7 @@
+# RoadLink Phase 1 spike backend.
+# All three were already present on the dev machine (verified 2026-08-21).
+# Persistence uses stdlib sqlite3; tests use stdlib urllib. No ORM, no pytest,
+# no httpx - deliberately zero install risk for the spike.
+fastapi>=0.141.1
+uvicorn>=0.52.4
+pydantic>=2.13.4

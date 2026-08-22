@@ -1,0 +1,17 @@
+# Versions pinned to what is ALREADY cached in ~/.gradle on this machine,
+# verified 2026-08-21. Do not bump without checking the cache first - network
+# reachability to Maven has not been confirmed in this environment.
+[versions]
+agp = "8.13.0"
+kotlin = "2.2.21"
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+
+# NOTE: [libraries] is intentionally empty.
+# The :spike-ble module has ZERO external dependencies - it uses only the
+# Android framework and the Kotlin stdlib. No AndroidX, no Compose, no
+# coroutines. That keeps the S0-S5 proof of concept buildable offline and
+# removes dependency resolution as a failure mode while we are debugging
+# radio behaviour. Room arrives at S7, once we know the network works.

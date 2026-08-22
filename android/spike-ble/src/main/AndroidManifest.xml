@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ============ BLE, Android 12+ (API 31+) ============ -->
+    <!-- neverForLocation lets the relay/central scan WITHOUT holding
+         ACCESS_FINE_LOCATION. The rider role needs fine location for GPS,
+         which is a separate concern layered on at S6. Keeping them apart is
+         what lets a relay-only device run with fewer permissions. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- ============ BLE, Android 11 and below (API <= 30) ============ -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <!-- Required for LE SCAN on API <= 30. Not needed on 31+ thanks to
+         neverForLocation above. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+
+    <!-- BLE is mandatory. required=true so an incompatible device fails loudly
+         at install rather than silently at runtime. -->
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="true" />
+
+    <!-- NOT declared yet, deliberately:
+           INTERNET / ACCESS_NETWORK_STATE  -> arrive at S8 (relay upload)
+           FOREGROUND_SERVICE*              -> arrive at S9 (background test)
+           POST_NOTIFICATIONS               -> arrive at S9
+           ACCESS_FINE_LOCATION (unbounded) -> arrives at S6 (real GPS fix)
+         The S0-S5 proof of concept runs foreground-only and touches no network,
+         so requesting any of these now would be noise in the permission matrix
+         we are trying to measure in T3. -->
+
+    <application
+        android:allowBackup="false"
+        android:label="RoadLink Spike"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.Light">
+
+        <activity
+            android:name=".SpikeActivity"
+            android:exported="true"
+            android:label="RoadLink Spike"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
