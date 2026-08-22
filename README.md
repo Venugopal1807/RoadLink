@@ -16,19 +16,28 @@ mechanism that extends delivery when another phone is nearby.
 
 ---
 
-## Status — 2026-08-22
+## Status — 2026-08-23
 
 | Area | State | Evidence |
 |---|---|---|
 | Backend ingestion + idempotency | Working | 61/61 assertions over real HTTP |
 | Kotlin ↔ Python packet signing | Working | `sig_valid=true` on a live server |
-| Local persistence (Room) | Implemented | 35 JVM tests; durability suite compiled, **not yet run** |
+| Local persistence (Room) | Working | 6/6 durability tests on an Android runtime *(emulated)* |
 | Delivery state machine | Working | Scenarios A–E unit tested |
-| Simulated relay transport | Working | Deterministic, explicitly labelled |
-| Direct network transport | Working | Covered by scenario tests |
+| Simulated relay transport | Working | Scenario A observed end to end *(emulated)* |
+| Direct network transport | Working | Scenario B observed end to end *(emulated)* |
 | Responder interface | Working | Reads the backend, not local state |
-| **Phone-to-phone BLE** | **NOT VALIDATED** | **No RoadLink BLE code has ever run on a phone** |
+| **Phone-to-phone BLE** | **NOT VALIDATED** | **No RoadLink BLE code has ever run on a radio** |
 | Crash detection (sensor) | Not started | Trigger interface exists; `TestCrashDetector` only |
+
+Full results, including what each run does *not* prove:
+[`docs/verification-log.md`](docs/verification-log.md).
+
+The strongest evidence so far was unplanned. During the first emulator run an
+emergency hit a genuine platform fault (Android blocks cleartext HTTP), failed
+delivery **eight times**, survived an application **rebuild and reinstall**, and
+was delivered on the ninth attempt — `sig_valid=true`. Nothing was lost, which
+is the entire product claim.
 
 ### What is honestly unproven
 
@@ -201,3 +210,7 @@ be dishonest.
 - SQLite, not PostgreSQL. `backend/app/db.py` is the swap point.
 - Crash detection is a button. The sensor engine is not written.
 - Bluetooth company ID `0xFFFF` is the SIG development value.
+- **Cleartext HTTP** is permitted to loopback and private-LAN addresses only
+  (`res/xml/network_security_config.xml`); the base config still denies it.
+  The prototype backend has no certificate. A real deployment uses HTTPS and
+  deletes that file rather than relaxing it.
