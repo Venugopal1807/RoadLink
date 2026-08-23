@@ -9,7 +9,7 @@ is the how and the why.
 | Suite | Command | Count | Environment |
 |---|---|---|---|
 | Backend ingestion | `python backend/tests/test_idempotency.py` | 61 assertions | Real HTTP, live uvicorn |
-| Android JVM | `./gradlew :app:testDebugUnitTest` | 62 tests | JVM |
+| Android JVM | `./gradlew :app:testDebugUnitTest` | 68 tests | JVM |
 | Android instrumented | `./gradlew :app:connectedDebugAndroidTest` | 8 tests | Device or emulator |
 | Cross-language wire | `python tools/verify_wire_compat.py` | 6 checks | Real HTTP |
 | Build | `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :spike-ble:assembleDebug` | — | |
@@ -42,7 +42,7 @@ it.
 The server is started on a throwaway port against a temporary database, so the
 suite never touches a development database.
 
-## Android JVM — 62 tests
+## Android JVM — 68 tests
 
 ```bash
 cd android

@@ -162,7 +162,7 @@ the clock running.
 | Suite | Result | Command |
 |---|---|---|
 | Backend | 61 passed, 0 failed | `python backend/tests/test_idempotency.py` |
-| Android JVM | 62 passed, 0 failed | `./gradlew :app:testDebugUnitTest` |
+| Android JVM | 68 passed, 0 failed | `./gradlew :app:testDebugUnitTest` |
 | Android instrumented | 8 passed, 0 failed *(emulated)* | `./gradlew :app:connectedDebugAndroidTest` |
 | Kotlin ↔ Python wire | PASSED, `sig_valid=true` | `python tools/verify_wire_compat.py` |
 
@@ -367,6 +367,60 @@ Removed a machine-specific SDK path containing a username from
 
 Nothing about BLE, nothing about physical devices, nothing about installation.
 No radio, no handset, no instrumented run.
+
+---
+
+## 2026-08-23 — Submission packaging, and the on-device backend address
+
+### A submission-blocking defect, found and fixed
+
+The backend URL was fixed at build time. An installed APK therefore pointed at
+whatever machine produced it, so any other person installing it — a judge, a
+teammate — reached a host they were not on, with no way to correct it short of
+recompiling. The distributed artefact was usable only by its builder.
+
+`BackendConfig` now stores the address per install and `SosApiClient` reads it
+per request rather than capturing it once. The build property remains the
+default. The editor is the first card on the Rider screen.
+
+Writing the test for the input handling caught a second defect before it
+shipped: trailing-slash trimming ran before the scheme check, so `"http://"`
+became `"http:"`, which then looked like a hostname and produced
+`"http://http:"`. Scheme detection now runs first, and unusable input is refused
+so the previous working address stands.
+
+### A second defect fixed the same day
+
+The release network security config listed private-LAN ranges as `<domain>`
+entries (`192.168.0.0/16`, `172.16.0.0/12`, `10.0.0.0/8`). Android's `<domain>`
+matches hostnames only and does not parse CIDR, so those entries never matched a
+real address. It went unnoticed because every recorded run reached `10.0.2.2`,
+which is a literal entry. A phone pointed at a laptop over Wi-Fi would have
+failed with `Cleartext HTTP traffic not permitted`. Debug builds now permit
+cleartext outright; release builds still deny it.
+
+Verified by inspecting merged resources: the debug variant packages
+`cleartextTrafficPermitted="true"`, the release variant keeps `"false"` with
+only the loopback exception.
+
+### Re-run results
+
+| Suite | Result | Environment |
+|---|---|---|
+| Backend | 61 passed, 0 failed | Real HTTP, live uvicorn |
+| Android JVM | **68 passed, 0 failed** | JVM (6 new, on address handling) |
+| Kotlin ↔ Python wire | PASSED, `sig_valid=true` | Real HTTP |
+| `assembleDebug`, `assembleRelease`, `assembleDebugAndroidTest`, `:spike-ble:assembleDebug` | BUILD SUCCESSFUL | |
+| Deploy blueprint start command | `/healthz` 200, `/api/v1/sos/active` 200 | Local, `PORT=8123` |
+| APK carries its configured backend URL | Confirmed in `classes4.dex` | |
+
+### What this does NOT prove
+
+The APK has still never been installed or launched. No emulator was started —
+the machine had 0.4 GB of 7.7 GB free, and starting one would have made it
+unusable. Installation, launch and every on-device behaviour remain **UNKNOWN**.
+
+Nothing about BLE. No radio, no handset, no instrumented run.
 
 ---
 

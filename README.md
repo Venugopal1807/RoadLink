@@ -186,7 +186,7 @@ Bind `0.0.0.0` so phones can reach it over the LAN. Find the host IP with
 
 ```bash
 cd android
-./gradlew :app:testDebugUnitTest       # 62 JVM tests
+./gradlew :app:testDebugUnitTest       # 68 JVM tests
 ./gradlew :app:assembleDebug
 
 # point the app at your machine instead of the emulator loopback:

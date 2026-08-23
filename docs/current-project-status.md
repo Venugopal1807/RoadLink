@@ -62,7 +62,7 @@ Re-run on 2026-08-23. Commands are in [`testing.md`](testing.md).
 | Suite | Result | Evidence class |
 |---|---|---|
 | Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP against live uvicorn |
-| Android JVM unit tests | **62 passed, 0 failed** | JVM |
+| Android JVM unit tests | **68 passed, 0 failed** | JVM |
 | Kotlin ↔ Python wire compatibility | **PASSED**, `sig_valid=true` | Real HTTP |
 | `:app:assembleDebug` | BUILD SUCCESSFUL | |
 | `:app:assembleDebugAndroidTest` | BUILD SUCCESSFUL | |

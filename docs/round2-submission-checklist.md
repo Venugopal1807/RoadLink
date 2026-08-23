@@ -10,7 +10,7 @@ strength of a plan.
 | # | Item | State | Evidence / what is missing |
 |---|---|---|---|
 | 1 | **Functional production-level project** | **READY** (as a prototype) | Builds, runs, all suites pass. Explicitly a prototype, not production infrastructure — see [`limitations.md`](limitations.md) |
-| 2 | **Source code** | **READY** | 98 tracked files, clean tree, 16 commits, pushed to `github.com/Venugopal1807/RoadLink` |
+| 2 | **Source code** | **READY** | 98 tracked files, clean tree, 22 commits, pushed to `github.com/Venugopal1807/RoadLink` |
 | 3 | **Documentation** | **READY** | 15 documents under `docs/`, indexed from the README |
 | 4 | **Deployed / working demo** | **PENDING** | Blueprint and Dockerfile added; **no service deployed**. LAN demo path is verified. See [`deployment.md`](deployment.md) |
 | 5 | **PPT** | **PENDING** | Slide source written at [`submission-presentation.md`](submission-presentation.md); the deck file itself must be produced |
@@ -44,7 +44,7 @@ Re-run 2026-08-23.
 | Suite | Result | Evidence class |
 |---|---|---|
 | Backend ingestion + idempotency | 61 passed, 0 failed | **VERIFIED** — real HTTP, live uvicorn |
-| Android JVM | 62 passed, 0 failed | **VERIFIED** — JVM |
+| Android JVM | 68 passed, 0 failed | **VERIFIED** — JVM |
 | Kotlin ↔ Python wire compatibility | PASSED, `sig_valid=true` | **VERIFIED** — real HTTP |
 | `:app:assembleDebug` | BUILD SUCCESSFUL | **VERIFIED** |
 | `:app:assembleRelease` | BUILD SUCCESSFUL | **VERIFIED** |
@@ -95,7 +95,7 @@ Re-run 2026-08-23.
 ```bash
 # 1. all suites green
 cd backend && python tests/test_idempotency.py          # expect 61 passed
-cd ../android && ./gradlew :app:testDebugUnitTest --rerun   # expect 62 tests
+cd ../android && ./gradlew :app:testDebugUnitTest --rerun   # expect 68 tests
 cd .. && python tools/verify_wire_compat.py             # expect PASSED
 
 # 2. build the demo APK against the backend you will actually use

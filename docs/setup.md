@@ -70,8 +70,14 @@ cd android
 
 The APK lands at `app/build/outputs/apk/debug/app-debug.apk`.
 
-The backend URL is a build property, so pointing the app somewhere else needs no
-code change:
+The backend address can be set two ways, and neither requires a code change.
+
+**On the device (usually what you want).** The first card on the Rider tab is
+**Backend address**. Type the backend and press **Apply**. It is stored per
+install, takes effect on the next request, and survives a restart. This is what
+makes one APK usable by anyone, on any network.
+
+**At build time**, as the default that a fresh install starts with:
 
 ```bash
 # emulator (default) — 10.0.2.2 is the host loopback as seen from an AVD
@@ -80,6 +86,9 @@ code change:
 # physical phone — your LAN IP from step 2
 ./gradlew :app:assembleDebug -Proadlink.backendUrl=http://192.168.1.23:8000
 ```
+
+No address is committed to the repository either way; the build value is a
+property and the device value lives in the install.
 
 Install:
 
@@ -124,7 +133,7 @@ See [`testing.md`](testing.md) for the full matrix and what each suite proves.
 
 ```bash
 cd backend && python tests/test_idempotency.py     # 61 assertions
-cd android && ./gradlew :app:testDebugUnitTest     # 62 JVM tests
+cd android && ./gradlew :app:testDebugUnitTest     # 68 JVM tests
 cd .. && python tools/verify_wire_compat.py        # cross-language wire check
 ```
 
@@ -144,9 +153,10 @@ loopback and private-LAN ranges only, via `res/xml/network_security_config.xml`.
 If your backend is on a public IP this will correctly refuse. Use a LAN address.
 
 **Delivery fails with a connection error from a physical phone**
-The app was probably built with the default emulator URL. Rebuild with
-`-Proadlink.backendUrl=http://<LAN-IP>:8000`. Confirm the phone can reach it by
-opening `http://<LAN-IP>:8000/healthz` in the phone's browser.
+The app is pointed at the wrong address. Fix it on the device: Rider tab →
+**Backend address** → type `http://<LAN-IP>:8000` → **Apply**. The Responder tab
+shows REACHABLE when it is right. Confirm the phone can reach the backend at all
+by opening `http://<LAN-IP>:8000/healthz` in the phone's browser first.
 
 **Emergencies stay `QUEUED` forever**
 That is correct behaviour when nothing can deliver them, and is the product
