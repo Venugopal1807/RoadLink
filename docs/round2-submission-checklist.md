@@ -10,7 +10,7 @@ strength of a plan.
 | # | Item | State | Evidence / what is missing |
 |---|---|---|---|
 | 1 | **Functional production-level project** | **READY** (as a prototype) | Builds, runs, all suites pass. Explicitly a prototype, not production infrastructure — see [`limitations.md`](limitations.md) |
-| 2 | **Source code** | **READY** | 95 tracked files, clean tree, 13 commits, pushed to `github.com/Venugopal1807/RoadLink` |
+| 2 | **Source code** | **READY** | 98 tracked files, clean tree, 16 commits, pushed to `github.com/Venugopal1807/RoadLink` |
 | 3 | **Documentation** | **READY** | 15 documents under `docs/`, indexed from the README |
 | 4 | **Deployed / working demo** | **PENDING** | Blueprint and Dockerfile added; **no service deployed**. LAN demo path is verified. See [`deployment.md`](deployment.md) |
 | 5 | **PPT** | **PENDING** | Slide source written at [`submission-presentation.md`](submission-presentation.md); the deck file itself must be produced |
