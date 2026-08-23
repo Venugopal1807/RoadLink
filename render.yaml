@@ -1,0 +1,26 @@
+# Render blueprint for the RoadLink prototype backend.
+#
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repository.
+# Render reads this file, provisions the service and gives it an HTTPS URL.
+# No secrets are required and none are stored here.
+#
+# The free plan sleeps after inactivity and has an ephemeral filesystem, so
+# submitted emergencies do not survive a restart. See docs/deployment.md.
+
+services:
+  - type: web
+    name: roadlink-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      # Record signature failures rather than rejecting them, matching local
+      # behaviour. Set to 1 to reject with 403 instead.
+      - key: ROADLINK_REQUIRE_SIG
+        value: "0"
+      # The destructive debug reset endpoint stays disabled.
+      - key: ROADLINK_ALLOW_RESET
+        value: "0"
