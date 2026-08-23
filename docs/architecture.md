@@ -61,7 +61,7 @@ Enforced structurally rather than by convention:
 - **Transports cannot mutate or complete an event.** They receive an immutable
   event and return a `TransportResult`. Only `DeliveryManager` writes state.
 - **`DeliveryManager.submit` returns only after a durable write.** If
-  persistence throws, nothing is transmitted and the caller is told — an event
+  persistence throws, nothing is transmitted and the caller is told. An event
   that was sent but not stored cannot be retried.
 - **Room is configured `synchronous = FULL` with no destructive migration
   fallback.** A committed transaction has reached the disk before the write
@@ -96,7 +96,7 @@ independently, and the backend's idempotency makes that redundancy safe.
 
 1. **Direct network.** When the rider is online this is both fastest and most
    certain, and its availability check is a cheap connectivity read.
-2. **BLE relay.** Exists precisely for the case direct upload cannot handle —
+2. **BLE relay.** Exists precisely for the case direct upload cannot handle:
    the rider having no connectivity at all.
 3. **Simulated relay.** Last, so it can never pre-empt a real path.
 
@@ -112,7 +112,7 @@ in the same pass. "BLE unavailable → direct upload" needs no special case.
 | Any transport failure | Event remains persisted |
 | Backend accepts | `DELIVERED` |
 
-Retries use exponential backoff — 1s, 2s, 4s, 8s, 16s, capped at 30s — over a
+Retries use exponential backoff (1s, 2s, 4s, 8s, 16s, capped at 30s) over a
 loop that runs every 3s. A transport that reports itself *unavailable* is never
 tried, so it does not advance the attempt count; its reason is recorded once and
 repeats are suppressed until it changes, while availability is still re-checked
@@ -141,7 +141,7 @@ Two ordering rules matter:
 The topology is unusual: the phone *in distress* takes the peripheral role and
 announces itself; the helper phone scans and reaches out. This works only where
 `getBluetoothLeAdvertiser()` is non-null, which is a per-chipset fact rather
-than an OS guarantee — and is the single largest open risk in the project.
+than an OS guarantee, and it is the single largest open risk in the project.
 
 - **Advertisement is a beacon/trigger only.** 13 bytes in the scan response,
   carrying schema version, flags, an 8-byte `event_ref`, confidence and age. It
@@ -163,20 +163,20 @@ uploaded one byte-identical, and therefore verifiable against the same
 signature.
 
 Encoding is hand-written rather than delegated to a JSON library because
-coordinates must appear at exactly 7 decimal places — the precision the
+coordinates must appear at exactly 7 decimal places, the precision the
 signature was computed over. Signing is HMAC-SHA256 truncated to 128 bits over a
 canonical string, mirrored between `domain/Canonical.kt` and
 `backend/app/canonical.py`. `tools/verify_wire_compat.py` POSTs Kotlin-produced
 bytes at the real Python backend, because a canonicalisation mismatch does not
-error — it silently stores every emergency with `sig_valid=false`.
+error. It silently stores every emergency with `sig_valid=false`.
 
 A relay never re-signs: it does not hold the rider's key, and re-signing would
 destroy the only evidence the packet arrived unmodified.
 
 ## Backend
 
-FastAPI over stdlib `sqlite3` with a thin repository layer — no ORM, so there is
-one obvious swap point for PostgreSQL. Two tables: `events` keyed on `event_id`,
+FastAPI over stdlib `sqlite3` with a thin repository layer rather than an ORM,
+so there is one obvious swap point for PostgreSQL. Two tables: `events` keyed on `event_id`,
 and an append-only `audit` table.
 
 Ingestion is idempotent: `201` the first time an `event_id` is seen, `200`
@@ -199,7 +199,7 @@ A real sensor event delivered by the simulator is *not* BLE evidence.
 `EmergencyEvent.isFullyReal` requires both axes to be real. The `simulated` flag
 sits **inside** the HMAC signature, so no downstream layer can flip it without
 invalidating the packet. Simulated deliveries are recorded against their own wire
-path, `simulated_relay` — never `ble_relay` — so a simulated hop cannot become
+path, `simulated_relay`, never `ble_relay`, so a simulated hop cannot become
 fabricated BLE evidence in the audit trail.
 
 ## What the responder reads

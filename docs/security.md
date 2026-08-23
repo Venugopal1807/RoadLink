@@ -63,8 +63,8 @@ a single function, so this is a contained change.
 
 ## Privacy in the BLE advertisement
 
-The advertisement is a **beacon/trigger only** — 13 bytes, and deliberately not
-the payload:
+The advertisement is a **beacon/trigger only**: 13 bytes, and deliberately not
+the payload.
 
 | Field | Bytes | |
 |---|---|---|
@@ -80,7 +80,7 @@ cannot correlate a broadcast with a backend record. Device name inclusion is
 explicitly disabled in both the advertisement and the scan response, because the
 default Android device name is frequently rider-identifying.
 
-The actual emergency — coordinates included — travels only over the **connected
+The actual emergency, coordinates included, travels only over the **connected
 GATT link**, never in the open broadcast. The acknowledgement carries the
 `event_id`, which is safe for the same reason.
 
@@ -110,8 +110,8 @@ There is no account system, so there is no credential to steal.
 private-LAN ranges only; the base configuration still denies it, so the app will
 refuse cleartext to a public address.
 
-This was added in response to a real failure — Android 9+ blocked every delivery
-until it existed — and is documented in
+This was added in response to a real failure: Android 9+ blocked every delivery
+until it existed. It is documented in
 [`verification-log.md`](verification-log.md). A real deployment uses HTTPS and
 **deletes** that file rather than relaxing it further.
 
@@ -126,7 +126,7 @@ until it existed — and is documented in
   `ROADLINK_ALLOW_RESET=1`). Neither should outlive the prototype.
 - `ROADLINK_REQUIRE_SIG` defaults to `0`, so packets failing verification are
   **stored and flagged** rather than rejected. This is deliberate for
-  development — during bring-up a canonicalisation mismatch is far more likely
+  development. During bring-up a canonicalisation mismatch is far more likely
   than an attacker, and silently dropping emergency events while debugging that
   would be the worse failure. Every event records `sig_valid` either way, and
   the audit trail keeps it. A deployment sets it to `1`.
@@ -145,7 +145,7 @@ app requests nothing it does not use.
 
 ## Data retention
 
-There is **no delete path anywhere in the local store** — that is the product's
+There is **no delete path anywhere in the local store**. That is the product's
 core invariant, and it is also a privacy trade-off worth naming: emergencies,
 including a relay's copies of other people's, are retained indefinitely on the
 device. A production system needs a retention policy that discharges custody

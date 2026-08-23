@@ -26,7 +26,7 @@ python tests/test_idempotency.py       # exit 0 = all passed
 ```
 
 Runs against a **real uvicorn server over real HTTP**, using stdlib `urllib`
-only — no pytest, no httpx. Testing over the wire rather than with an in-process
+only, with no pytest and no httpx. Testing over the wire rather than with an in-process
 client is deliberate: it exercises the actual status codes and JSON codec, and
 lets the suite fire genuinely concurrent duplicate submissions, which is where
 idempotency is most likely to break.
@@ -67,7 +67,7 @@ the production code path. Latencies are zeroed and the clock is manual, so runs
 are deterministic.
 
 `DeliveryInvariantTest` is worth singling out. It asserts the *sequence* of
-operations across components rather than that both occurred — that is the only
+operations across components rather than that both occurred. That is the only
 way to prove persist-before-transmit rather than assume it.
 
 ## Android instrumented — 8 tests
@@ -82,7 +82,7 @@ adb devices                              # must list at least one
 
 These cover the half of the core invariant a JVM test cannot reach: that a
 persisted emergency genuinely *survives* the database being closed and reopened.
-They deliberately use an **on-disk** Room database — an in-memory one would pass
+They deliberately use an **on-disk** Room database. An in-memory one would pass
 every assertion below while proving nothing about durability.
 
 | Class | Tests | What it proves |
@@ -92,7 +92,7 @@ every assertion below while proving nothing about durability.
 
 Note that `connectedAndroidTest` **uninstalls the app under test**, wiping its
 database. A successful app launch after a schema change is therefore not
-evidence that a migration ran on live data — `MigrationTest` is.
+evidence that a migration ran on live data. `MigrationTest` is.
 
 ## Cross-language wire check
 
@@ -108,7 +108,7 @@ backend tests pin the Python side, but only a round trip proves the two agree on
 the bytes, the JSON encoding and the coordinate precision simultaneously.
 
 It matters because the failure mode is **silent**. A canonicalisation mismatch
-does not error — it stores every emergency with `sig_valid = false`, and nothing
+does not error. It stores every emergency with `sig_valid = false`, and nothing
 surfaces until somebody reads that column.
 
 See [`../tools/README.md`](../tools/README.md) for the individual assertions.
