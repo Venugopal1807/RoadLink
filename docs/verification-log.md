@@ -162,9 +162,13 @@ the clock running.
 | Suite | Result | Command |
 |---|---|---|
 | Backend | 61 passed, 0 failed | `python backend/tests/test_idempotency.py` |
-| Android JVM | 58 passed, 0 failed | `./gradlew :app:testDebugUnitTest` |
+| Android JVM | 60 passed, 0 failed | `./gradlew :app:testDebugUnitTest` |
 | Android instrumented | 8 passed, 0 failed *(emulated)* | `./gradlew :app:connectedDebugAndroidTest` |
 | Kotlin ↔ Python wire | PASSED, `sig_valid=true` | `python tools/verify_wire_compat.py` |
+
+Last re-run 2026-08-23 for the submission audit, except the instrumented suite —
+no device was attached, so its figure is carried forward from the emulator run
+recorded above rather than re-observed.
 
 ---
 
@@ -238,6 +242,74 @@ version, scoped to androidTest so the shipped app's resolution is untouched.
 Nothing about BLE. No advertising, scanning, GATT connection, packet transfer
 or acknowledgement has occurred over a radio. The codecs are proven; the
 transport is not.
+
+---
+
+## 2026-08-23 — Submission audit
+
+A full read of the repository against the code, plus a re-run of everything that
+does not need a radio. No architecture was changed.
+
+### Re-run results
+
+| Suite | Result | Environment |
+|---|---|---|
+| Backend | 61 passed, 0 failed | Real HTTP, live uvicorn on this machine |
+| Android JVM | 60 passed, 0 failed | JVM |
+| Kotlin ↔ Python wire | PASSED, `sig_valid=true` | Real HTTP |
+| `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:spike-ble:assembleDebug` | BUILD SUCCESSFUL | |
+
+The instrumented suite was **not** re-run: `adb devices` was empty. Its 8/8
+figure remains the emulator result recorded earlier in this log.
+
+### Defect found and fixed
+
+**Unbounded audit-trail growth while offline.**
+
+A transport reporting itself unavailable is skipped by a pre-check and never
+tried, so it does not advance the event's `attemptCount` and therefore never
+sets `lastAttemptAt` — which is what `isDue` gates backoff on. A queued event
+with every transport unavailable was therefore due on *every* pass, and each
+pass appended one audit row per transport.
+
+Measured with a new test: **22 audit rows after 11 passes** where 2 was correct.
+In the running app the loop interval is 3s with three transports, so a single
+queued emergency would accumulate roughly 60 audit rows per minute for as long
+as the rider stayed offline — unbounded growth during precisely the scenario
+this product exists for, and enough to bury the informative rows and make the
+Rider tab's attempt count look broken.
+
+Fixed by recording the first occurrence of an unavailability reason per
+(event, transport) and suppressing identical repeats until the reason changes.
+Availability is still re-checked on every pass, so delivery still resumes on the
+first pass after a transport returns; the memo is cleared when a transport
+becomes available again and when the event is delivered.
+
+Two tests added to `DeliveryScenarioTest`:
+
+- `a transport that stays unavailable is recorded once, not on every pass`
+- `suppressing repeated unavailability still delivers the moment a transport returns`
+
+The second exists because the obvious fix for the first — throttling the whole
+pass — would have broken reconnect responsiveness, which is Scene 5 of the demo.
+
+### Documentation corrected against the code
+
+Three places where the docs had drifted from what the code does:
+
+- README stated 35 JVM tests; the suite is 60.
+- ADR-002 described `BleRelayTransport` as having "a real capability probe and
+  no transfer logic". The radio implementation has existed since commit
+  `1ffb021`. Recorded as a dated update rather than a rewrite.
+- ADR-002 and `DirectNetworkTransport`'s own doc comment both stated the old
+  transport priority (BLE first, direct last). Production order has been
+  direct-network first since `1ffb021`.
+
+### What this session does NOT prove
+
+Nothing about BLE, and nothing new about persistence. No radio was involved, no
+device was attached, and no instrumented test was executed. The fix above is
+covered by JVM tests only.
 
 ---
 

@@ -17,10 +17,11 @@ local.properties
 *.aab
 .cxx/
 
-# IDE
+# IDE / local tooling state
 .idea/
 *.iml
 .vscode/
+.claude/settings.local.json
 
 # OS
 Thumbs.db

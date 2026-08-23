@@ -9,9 +9,12 @@ import com.roadlink.net.SosApi
  *
  * This is the transport that makes RoadLink a complete product even if BLE
  * never works: an emergency created with no connectivity waits on disk, and
- * this delivers it the moment the network returns. It is last in the priority
- * order not because it is least important but because it is the one that needs
- * infrastructure the rider may not have.
+ * this delivers it the moment the network returns.
+ *
+ * It sits first in the priority order. When the rider can reach the backend
+ * that path is both faster and more certain than any relay, and its
+ * availability check is a cheap connectivity read, so when the rider is offline
+ * the cascade falls straight through to BLE.
  */
 class DirectNetworkTransport(
     private val api: SosApi,

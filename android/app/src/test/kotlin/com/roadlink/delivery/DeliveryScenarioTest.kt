@@ -51,8 +51,9 @@ class DeliveryScenarioTest {
         }
         network = DirectNetworkTransport(api, Connectivity { online })
 
-        // Relay first, direct network second. BLE would sit ahead of both once
-        // it is validated; its absence changes nothing about this ordering.
+        // Relay first here so the scenarios below can exercise a relay hop
+        // deliberately. Production order is direct-network first (see
+        // AppContainer); the cascade logic under test is the same either way.
         return DeliveryManager(store, listOf(relay, network), clock)
     }
 
@@ -254,6 +255,60 @@ class DeliveryScenarioTest {
             "once backoff elapses the retry proceeds",
             store.get("evt-1")!!.attemptCount > attemptsAfterFirst,
         )
+    }
+
+    /**
+     * The offline stretch is where the loop spends most of its time, and a
+     * transport that reports itself unavailable is never tried - so it does not
+     * advance the attempt count and does not consume backoff. The reason must
+     * therefore be recorded once rather than on every pass, or the audit trail
+     * grows without bound during exactly the scenario RoadLink exists for.
+     */
+    @Test
+    fun `a transport that stays unavailable is recorded once, not on every pass`() = runTest {
+        val manager = setUp()
+        relay.relayInRange = false
+        online = false
+
+        manager.submit(testEvent())
+        manager.runDeliveryPass()
+        val auditAfterFirstPass = store.attempts("evt-1").size
+        assertTrue("the first pass records why nothing was tried", auditAfterFirstPass > 0)
+
+        // Ten more passes, as the loop would run while the rider stays offline.
+        repeat(10) { manager.runDeliveryPass() }
+
+        assertEquals(
+            "an unchanged unavailable reason must not be appended again",
+            auditAfterFirstPass,
+            store.attempts("evt-1").size,
+        )
+        assertEquals("and nothing may be delivered", 0, api.eventCount)
+        assertNotNull("and the event is still held", store.get("evt-1"))
+    }
+
+    /**
+     * Suppressing the repeat must not suppress the recovery: the moment a
+     * transport becomes available again the event is delivered, and a later
+     * outage is recorded afresh rather than swallowed by the memo.
+     */
+    @Test
+    fun `suppressing repeated unavailability still delivers the moment a transport returns`() = runTest {
+        val manager = setUp()
+        relay.relayInRange = false
+        online = false
+
+        manager.submit(testEvent())
+        repeat(5) { manager.runDeliveryPass() }
+        assertEquals("still nothing delivered", 0, api.eventCount)
+
+        online = true
+        clock.advanceBy(60_000)
+        manager.runDeliveryPass()
+
+        val delivered = store.get("evt-1")!!
+        assertEquals(DeliveryState.DELIVERED, delivered.state)
+        assertEquals(TransportKind.DIRECT_NETWORK, delivered.deliveredVia)
     }
 
     @Test

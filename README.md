@@ -148,7 +148,7 @@ Bind `0.0.0.0` so phones can reach it over the LAN. Find the host IP with
 
 ```bash
 cd android
-./gradlew :app:testDebugUnitTest       # 35 JVM tests
+./gradlew :app:testDebugUnitTest       # 60 JVM tests
 ./gradlew :app:assembleDebug
 
 # point the app at your machine instead of the emulator loopback:
@@ -204,13 +204,32 @@ android/
   app/         the RoadLink product
   spike-ble/   S0–S5 hardware harness, zero dependencies, untouched
 backend/       FastAPI + stdlib sqlite3, idempotent ingestion
-docs/          spike plan, S0–S5 runbook, decision records
+docs/          status, architecture, setup, demo, testing, limitations, security
 tools/         cross-language wire verification
 ```
 
 `:spike-ble` is deliberately left exactly as it is. `docs/s0-s5-runbook.md` is
-written against that APK, tomorrow is the only hardware window, and changing it
-now would risk the one thing that cannot be rescheduled.
+written against that APK, and it is kept as the diagnostic fallback for
+isolating which side of a BLE failure is at fault.
+
+---
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [`current-project-status.md`](docs/current-project-status.md) | What is implemented, verified, emulator-only, untested, and blocking |
+| [`architecture.md`](docs/architecture.md) | How the system is built, and why |
+| [`setup.md`](docs/setup.md) | Clean checkout to running app, plus troubleshooting |
+| [`demo-script.md`](docs/demo-script.md) | The 2–5 minute demonstration, scene by scene |
+| [`testing.md`](docs/testing.md) | How to run each suite and what each one proves |
+| [`limitations.md`](docs/limitations.md) | What RoadLink does not do and may not claim |
+| [`security.md`](docs/security.md) | Threat model, packet integrity, BLE privacy, prototype shortcuts |
+| [`verification-log.md`](docs/verification-log.md) | Observed results, and what each does *not* prove |
+| [`physical-ble-procedure.md`](docs/physical-ble-procedure.md) | The T1–T11 hardware ladder |
+| [`physical-test-results.md`](docs/physical-test-results.md) | Its results sheet — currently all NOT YET TESTED |
+| [`submission-checklist.md`](docs/submission-checklist.md) | Round 2 submission state |
+| [`ADR-002`](docs/decisions/ADR-002-transport-abstraction.md) | Why delivery sits behind a transport abstraction |
 
 ---
 
@@ -225,14 +244,15 @@ be dishonest.
 
 ## Known limitations
 
+The short version; the full account is in
+[`docs/limitations.md`](docs/limitations.md) and
+[`docs/security.md`](docs/security.md).
+
+- **Phone-to-phone BLE is unproven on hardware.** Implemented and unit-tested,
+  never run on a radio.
+- **Crash detection is a button.** The sensor engine is not written.
 - **HMAC with a key compiled into the app is not key management.** Anyone with
   the APK has the key. Production is a per-device Ed25519 keypair with the
   private key in the Android Keystore.
-- No authentication on any backend endpoint. LAN only.
-- SQLite, not PostgreSQL. `backend/app/db.py` is the swap point.
-- Crash detection is a button. The sensor engine is not written.
-- Bluetooth company ID `0xFFFF` is the SIG development value.
-- **Cleartext HTTP** is permitted to loopback and private-LAN addresses only
-  (`res/xml/network_security_config.xml`); the base config still denies it.
-  The prototype backend has no certificate. A real deployment uses HTTPS and
-  deletes that file rather than relaxing it.
+- No authentication on any backend endpoint. SQLite, LAN only, cleartext HTTP
+  permitted to private addresses only.

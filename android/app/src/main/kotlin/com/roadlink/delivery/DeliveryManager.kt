@@ -14,6 +14,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Owns the delivery lifecycle of every emergency.
@@ -46,6 +47,25 @@ class DeliveryManager(
     private val passLock = Mutex()
 
     private var loop: Job? = null
+
+    /**
+     * The last "unavailable" reason recorded per (event, transport).
+     *
+     * A transport that reports itself unavailable was never tried, so it does
+     * not advance the event's attempt count and therefore does not consume
+     * backoff. Without this memo the loop would append an identical audit row
+     * for every transport on every pass - roughly one row per transport per
+     * loop interval, growing without bound during exactly the long offline
+     * stretch the product exists for, and burying the informative rows.
+     *
+     * The first occurrence is recorded, repeats are suppressed until the reason
+     * changes, and availability is still re-checked on every pass - so delivery
+     * resumes the moment a transport comes back.
+     *
+     * Concurrent because [deliver] is public and therefore not guaranteed to be
+     * called under [passLock].
+     */
+    private val lastUnavailable = ConcurrentHashMap<Pair<String, TransportKind>, String>()
 
     /**
      * DEVELOPMENT/DEMO ONLY. When set, only this transport is attempted.
@@ -139,10 +159,15 @@ class DeliveryManager(
             }
 
             if (!available) {
-                recordAttempt(current, transport, AttemptOutcome.UNAVAILABLE, "not available")
-                log("${transport.kind.label} unavailable for ${current.eventId.take(8)}")
+                if (recordUnavailable(current, transport, "not available")) {
+                    log("${transport.kind.label} unavailable for ${current.eventId.take(8)}")
+                }
                 continue
             }
+
+            // The transport is back. Forget the suppressed reason so a later
+            // outage is recorded afresh rather than silently deduplicated.
+            lastUnavailable.remove(current.eventId to transport.kind)
 
             current = current.transitionTo(
                 DeliveryState.DELIVERY_ATTEMPT,
@@ -164,6 +189,7 @@ class DeliveryManager(
                         at = clock.now(),
                     )
                     store.update(current)
+                    lastUnavailable.keys.removeAll { it.first == current.eventId }
                     log("DELIVERED ${current.eventId.take(8)} via ${transport.kind.label}" + if (result.duplicate) " (backend reported duplicate)" else "")
                     return current
                 }
@@ -295,6 +321,25 @@ class DeliveryManager(
     }
 
     // ----------------------------------------------------------------- audit
+
+    /**
+     * Record that [transport] was skipped, unless the identical reason is
+     * already the last thing recorded for this event and transport.
+     *
+     * @return true if a new audit row was written, so the caller can suppress a
+     *         duplicate log line too.
+     */
+    private suspend fun recordUnavailable(
+        event: EmergencyEvent,
+        transport: Transport,
+        reason: String,
+    ): Boolean {
+        val key = event.eventId to transport.kind
+        if (lastUnavailable[key] == reason) return false
+        lastUnavailable[key] = reason
+        recordAttempt(event, transport, AttemptOutcome.UNAVAILABLE, reason)
+        return true
+    }
 
     private suspend fun recordAttempt(
         event: EmergencyEvent,

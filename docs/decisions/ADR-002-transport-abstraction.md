@@ -36,10 +36,16 @@ and we would not necessarily notice.
 
 ```
 DeliveryManager
+   ├── DirectNetworkTransport   (real)
    ├── BleRelayTransport        (real, currently disarmed)
-   ├── SimulatedRelayTransport  (development)
-   └── DirectNetworkTransport   (real)
+   └── SimulatedRelayTransport  (development)
 ```
+
+*(Priority order updated 2026-08-23, when the BLE transport was integrated.
+Direct network moved to the front: when the rider is online that path is both
+faster and more certain, and its availability check is a cheap connectivity
+read, so an offline rider still falls straight through to BLE. The simulated
+relay moved to the back so it can never pre-empt a real path.)*
 
 `DeliveryManager` owns every state change. A transport receives an immutable
 event and returns a `TransportResult`; it cannot mutate, complete or delete the
@@ -51,9 +57,11 @@ skipped, one that returns `Failed` counts an attempt and the next transport is
 tried in the same pass. "BLE unavailable → direct upload" needs no special
 case; it falls out of the ordering.
 
-Nothing above `Transport.kt` imports a Bluetooth class. Tomorrow's integration
-is: lift the radio code from `:spike-ble` into `BleRelayTransport.deliver`,
-flip `enabled`, change nothing else.
+Nothing above `Transport.kt` imports a Bluetooth class. The integration was
+therefore: lift the radio code from `:spike-ble` into `BlePeripheral` /
+`BleCentral`, adapt it to the `Transport` contract in `BleRelayTransport`, and
+change nothing above that boundary. That has since been done — see the update
+below.
 
 ### 2. Fidelity is a first-class property, carried on two independent axes
 
@@ -116,9 +124,9 @@ and proves **nothing whatsoever** about BLE.
 
 - One extra indirection between the state machine and the radio.
 - A backend schema change, though additive and backward-compatible.
-- `BleRelayTransport` currently contains a real capability probe and no
-  transfer logic, which is an honest but incomplete class. It reports precisely
-  why it cannot deliver rather than pretending it can.
+- `BleRelayTransport` is disarmed by default, so an operator must deliberately
+  arm it before any BLE evidence can be produced. It reports precisely why it
+  cannot deliver rather than pretending it can.
 
 **Explicitly rejected**
 
@@ -129,10 +137,34 @@ and proves **nothing whatsoever** about BLE.
 | Reporting simulated deliveries as `ble_relay` | Fabricates the exact evidence the project intends to present |
 | Waiting for hardware before building the product | Spends the single hardware window on integration instead of measurement |
 
+## Update — 2026-08-23: the radio code now exists
+
+The BLE transport was implemented behind this boundary and the decision above
+held: nothing outside `com.roadlink.ble` and `BleRelayTransport` references a
+Bluetooth class, and no layer above `Transport.kt` changed.
+
+What was added: `BlePeripheral` (rider — advertiser + GATT server),
+`BleCentral` (relay — scanner + GATT client) and `RelayCoordinator`, which
+stores a collected emergency and then leaves forwarding to the ordinary
+`DeliveryManager` loop rather than implementing a second delivery path.
+
+Two consequences worth recording:
+
+- A relay verifies the packet signature before storing it, and withholds the
+  ACK until the write has succeeded. An ACK tells the rider its emergency is
+  safe somewhere else, so acknowledging before storing is the one way this
+  design could actually lose an SOS.
+- A relay ACK produces the state `RELAYED`, never `DELIVERED`, so custody is
+  never reported as arrival.
+
 ## Status of the BLE claim
 
-**Not validated.** `BleRelayTransport.enabled` is `false`. No number, log line
-or screenshot produced by this build is evidence that phone-to-phone BLE works.
-That evidence can only come from `docs/s0-s5-runbook.md` executed on two
-physical devices, and until it does, the honest statement is that BLE is
-designed and coded but unproven.
+**Not validated on hardware.** `BleRelayTransport.enabled` is `false`. No
+number, log line or screenshot produced by this build is evidence that
+phone-to-phone BLE works — the codecs and the orchestration are unit-tested,
+the radio path is not.
+
+That evidence can only come from `docs/physical-ble-procedure.md` executed on
+two physical devices (with `docs/s0-s5-runbook.md` kept as the `:spike-ble`
+diagnostic fallback for isolating a fault). Until it does, the honest statement
+is that BLE is designed and coded but unproven.
