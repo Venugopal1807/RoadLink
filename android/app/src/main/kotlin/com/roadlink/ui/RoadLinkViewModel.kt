@@ -109,18 +109,42 @@ class RoadLinkViewModel(private val container: AppContainer) : ViewModel() {
         val event = container.emergencyController.confirmFrom(container.testCrashDetector)
         if (event != null) {
             container.logLine("event ${event.eventId.take(8)} confirmed and persisted, now ${event.statusLabel}")
-            container.deliveryManager.runDeliveryPass()
+            // `busy` covers confirming and persisting, which is this button's
+            // actual job and is fast. Delivery runs detached: a transport timing
+            // out against an unreachable backend must never freeze the UI, and
+            // the event is already safely on disk by this point.
+            deliverInBackground()
         }
-        refreshResponder()
+    }
+
+    /** Run a delivery pass without holding [busy]. Safe: the pass is mutex-guarded. */
+    private fun deliverInBackground() {
+        viewModelScope.launch {
+            runCatching { container.deliveryManager.runDeliveryPass() }
+                .onFailure { container.logLine("delivery pass error: ${it.message}") }
+            runCatching { refreshResponder() }
+        }
     }
 
     /** Force an immediate delivery pass rather than waiting for the loop. */
-    fun deliverNow() = launchBusy {
-        val result = container.deliveryManager.runDeliveryPass()
-        container.logLine(
-            "delivery pass: considered=${result.considered} delivered=${result.delivered} stillQueued=${result.stillQueued}"
-        )
-        refreshResponder()
+    /**
+     * Force an immediate delivery pass rather than waiting for the loop.
+     *
+     * Not gated on [busy]: against an unreachable backend a pass can spend tens
+     * of seconds in connect timeouts, and disabling the UI for that long makes
+     * the app look hung. The pass is mutex-guarded, so a repeated tap is
+     * harmless.
+     */
+    fun deliverNow() {
+        viewModelScope.launch {
+            val result = runCatching { container.deliveryManager.runDeliveryPass() }.getOrNull()
+            if (result != null) {
+                container.logLine(
+                    "delivery pass: considered=${result.considered} delivered=${result.delivered} stillQueued=${result.stillQueued}"
+                )
+            }
+            runCatching { refreshResponder() }
+        }
     }
 
     /**
@@ -217,23 +241,27 @@ class RoadLinkViewModel(private val container: AppContainer) : ViewModel() {
      * Point this install at a different backend. Takes effect on the next
      * request; no restart, and nothing already queued is lost.
      */
-    fun setBackendUrl(value: String) = launchBusy {
+    fun setBackendUrl(value: String) {
         val cleaned = com.roadlink.platform.BackendConfig.normalise(value)
         if (cleaned == null) {
             container.logLine("backend address ignored: \"$value\" is not a usable URL")
-            return@launchBusy
+            return
         }
+        // Written synchronously, and deliberately NOT inside launchBusy. The
+        // reachability check that follows can take seconds against a wrong
+        // address, and holding `busy` across it used to disable the very card
+        // this came from. The address must be applied the instant it is typed.
         container.backendConfig.url = cleaned
         _backendUrl.value = container.backendConfig.url
         container.logLine("backend address set to ${container.backendConfig.url}")
-        refreshResponder()
+        viewModelScope.launch { runCatching { refreshResponder() } }
     }
 
-    fun resetBackendUrl() = launchBusy {
+    fun resetBackendUrl() {
         container.backendConfig.reset()
         _backendUrl.value = container.backendConfig.url
         container.logLine("backend address reset to the build default ${container.backendConfig.url}")
-        refreshResponder()
+        viewModelScope.launch { runCatching { refreshResponder() } }
     }
 
     suspend fun refreshResponder() {

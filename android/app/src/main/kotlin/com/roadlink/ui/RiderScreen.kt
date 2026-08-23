@@ -65,11 +65,15 @@ fun RiderScreen(vm: RoadLinkViewModel) {
     ) {
         item {
             SectionLabel("Backend address")
+            // Deliberately NOT gated on `busy`. A wrong address makes every
+            // delivery attempt time out, which used to hold `busy` true for
+            // tens of seconds and disable this card - the one control needed to
+            // correct the address. Taps landed on a dead button and nothing
+            // happened. Configuration must stay reachable while delivery fails.
             BackendAddressCard(
                 current = backendUrl,
                 onApply = vm::setBackendUrl,
                 onReset = vm::resetBackendUrl,
-                enabled = !busy,
             )
         }
 
@@ -321,7 +325,6 @@ private fun BackendAddressCard(
     current: String,
     onApply: (String) -> Unit,
     onReset: () -> Unit,
-    enabled: Boolean,
 ) {
     var draft by rememberSaveable(current) { mutableStateOf(current) }
     val dirty = draft.trim().trimEnd('/') != current
@@ -337,7 +340,6 @@ private fun BackendAddressCard(
                 value = draft,
                 onValueChange = { draft = it },
                 singleLine = true,
-                enabled = enabled,
                 label = { Text("Backend URL", fontSize = 11.sp) },
                 placeholder = { Text("http://192.168.1.10:8000", fontSize = 11.sp) },
                 textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
@@ -353,12 +355,11 @@ private fun BackendAddressCard(
             ) {
                 Button(
                     onClick = { onApply(draft) },
-                    enabled = enabled && dirty,
+                    enabled = dirty,
                     modifier = Modifier.weight(1f),
                 ) { Text("Apply", fontSize = 12.sp) }
                 OutlinedButton(
                     onClick = { onReset() },
-                    enabled = enabled,
                     modifier = Modifier.weight(1f),
                 ) { Text("Reset to default", fontSize = 12.sp) }
             }
