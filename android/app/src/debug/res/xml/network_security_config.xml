@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG BUILDS ONLY. This file overrides src/main's strict configuration for
+  the debug variant and permits cleartext HTTP to any host.
+
+  Why it exists: the prototype backend is a uvicorn process with no TLS
+  certificate, reached either at the emulator loopback (10.0.2.2) or at the
+  developer machine's LAN address over Wi-Fi. That LAN address is not known at
+  build time, and Android's <domain> element matches hostnames only - it does
+  NOT parse CIDR, so a range such as 192.168.0.0/16 is treated as a literal
+  hostname and never matches 192.168.1.23. Enumerating every possible LAN
+  address is not feasible, so the debug variant permits cleartext outright.
+
+  The release configuration in src/main/res/xml still denies cleartext, so a
+  release build can only talk to an HTTPS endpoint. A deployed backend over
+  HTTPS needs no exception at all and does not rely on this file.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
