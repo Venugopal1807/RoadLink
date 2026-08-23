@@ -36,6 +36,7 @@ import java.util.Locale
 fun ResponderScreen(vm: RoadLinkViewModel) {
     val events by vm.responderEvents.collectAsState()
     val reachable by vm.backendReachable.collectAsState()
+    val backendUrl by vm.backendUrl.collectAsState()
 
     LazyColumn(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -50,7 +51,7 @@ fun ResponderScreen(vm: RoadLinkViewModel) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(vm.backendUrl, fontSize = 11.sp, color = RlSlate)
+                        Text(backendUrl, fontSize = 11.sp, color = RlSlate)
                         when (reachable) {
                             true -> StatusChip("REACHABLE", RlGreen)
                             false -> StatusChip("UNREACHABLE", RlRed)

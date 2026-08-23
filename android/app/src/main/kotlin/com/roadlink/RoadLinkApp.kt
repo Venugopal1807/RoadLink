@@ -18,6 +18,7 @@ import com.roadlink.domain.TestCrashDetector
 import com.roadlink.net.SosApiClient
 import com.roadlink.platform.AndroidConnectivity
 import com.roadlink.platform.AndroidLocationProvider
+import com.roadlink.platform.BackendConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,7 +67,14 @@ class AppContainer(context: Context) {
 
     val store: EmergencyStore = RoomEmergencyStore(database.emergencyDao())
 
-    val api = SosApiClient(BuildConfig.BACKEND_BASE_URL)
+    /**
+     * The backend address, editable on the device. The build property supplies
+     * the default; without an on-device override an installed APK would point
+     * at whatever network it was built against and be unusable to anyone else.
+     */
+    val backendConfig = BackendConfig(context, BuildConfig.BACKEND_BASE_URL)
+
+    val api = SosApiClient({ backendConfig.url })
 
     val connectivity = AndroidConnectivity(context)
 

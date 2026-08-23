@@ -18,10 +18,22 @@ import java.net.URL
  * bytes it puts on the wire - is testable on a plain JVM.
  */
 class SosApiClient(
-    private val baseUrl: String,
+    /**
+     * Read per request rather than captured once, so the backend address can be
+     * changed at runtime without rebuilding the app or recreating this client.
+     * A build-time default is baked in; anyone installing the APK can point it
+     * at their own backend from the Rider screen.
+     */
+    private val baseUrl: () -> String,
     private val connectTimeoutMs: Int = 5_000,
     private val readTimeoutMs: Int = 10_000,
 ) : SosApi {
+
+    constructor(
+        baseUrl: String,
+        connectTimeoutMs: Int = 5_000,
+        readTimeoutMs: Int = 10_000,
+    ) : this({ baseUrl }, connectTimeoutMs, readTimeoutMs)
 
     /** Liveness check. The device uses this to decide whether it is really online. */
     override suspend fun health(): Boolean = withContext(Dispatchers.IO) {
@@ -110,7 +122,7 @@ class SosApiClient(
     }.getOrDefault(emptyList())
 
     private fun open(path: String, method: String): HttpURLConnection =
-        (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
+        (URL(baseUrl().trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = connectTimeoutMs
             readTimeout = readTimeoutMs

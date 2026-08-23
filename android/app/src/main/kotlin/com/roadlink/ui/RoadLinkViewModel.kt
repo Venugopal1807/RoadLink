@@ -76,7 +76,11 @@ class RoadLinkViewModel(private val container: AppContainer) : ViewModel() {
     val scriptedFailures: StateFlow<Int> = _scriptedFailures.asStateFlow()
 
     val riderId: String get() = container.riderId
-    val backendUrl: String get() = com.roadlink.BuildConfig.BACKEND_BASE_URL
+
+    private val _backendUrl = MutableStateFlow(container.backendConfig.url)
+    val backendUrl: StateFlow<String> = _backendUrl.asStateFlow()
+
+    val backendIsCustom: Boolean get() = container.backendConfig.isCustom
 
     init {
         // Keep the responder view and the attempt history fresh without the
@@ -207,6 +211,29 @@ class RoadLinkViewModel(private val container: AppContainer) : ViewModel() {
             kind?.let { "delivery pinned to ${it.label} (${it.fidelity}) for demo determinism" }
                 ?: "delivery restored to automatic transport selection"
         )
+    }
+
+    /**
+     * Point this install at a different backend. Takes effect on the next
+     * request; no restart, and nothing already queued is lost.
+     */
+    fun setBackendUrl(value: String) = launchBusy {
+        val cleaned = com.roadlink.platform.BackendConfig.normalise(value)
+        if (cleaned == null) {
+            container.logLine("backend address ignored: \"$value\" is not a usable URL")
+            return@launchBusy
+        }
+        container.backendConfig.url = cleaned
+        _backendUrl.value = container.backendConfig.url
+        container.logLine("backend address set to ${container.backendConfig.url}")
+        refreshResponder()
+    }
+
+    fun resetBackendUrl() = launchBusy {
+        container.backendConfig.reset()
+        _backendUrl.value = container.backendConfig.url
+        container.logLine("backend address reset to the build default ${container.backendConfig.url}")
+        refreshResponder()
     }
 
     suspend fun refreshResponder() {

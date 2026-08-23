@@ -12,14 +12,21 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,10 +57,22 @@ fun RiderScreen(vm: RoadLinkViewModel) {
     val relayCollected by vm.relayCollected.collectAsState()
     val forced by vm.forcedTransport.collectAsState()
 
+    val backendUrl by vm.backendUrl.collectAsState()
+
     LazyColumn(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        item {
+            SectionLabel("Backend address")
+            BackendAddressCard(
+                current = backendUrl,
+                onApply = vm::setBackendUrl,
+                onReset = vm::resetBackendUrl,
+                enabled = !busy,
+            )
+        }
+
         item {
             SectionLabel("Trigger")
             Button(
@@ -286,6 +305,76 @@ fun RiderScreen(vm: RoadLinkViewModel) {
         }
 
         item { Text("", Modifier.height(24.dp)) }
+    }
+}
+
+/**
+ * Where this install sends emergencies.
+ *
+ * Present because the build-time default points at whatever machine produced
+ * the APK. Anyone else installing it has to be able to redirect it, or the app
+ * can never reach a backend. Editing this changes nothing about persistence:
+ * queued emergencies stay queued and are delivered to the new address.
+ */
+@Composable
+private fun BackendAddressCard(
+    current: String,
+    onApply: (String) -> Unit,
+    onReset: () -> Unit,
+    enabled: Boolean,
+) {
+    var draft by rememberSaveable(current) { mutableStateOf(current) }
+    val dirty = draft.trim().trimEnd('/') != current
+
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                "Emergencies are sent here. Set it to the machine running the " +
+                    "RoadLink backend, then press Apply.",
+                fontSize = 10.sp, color = RlSlate,
+            )
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                singleLine = true,
+                enabled = enabled,
+                label = { Text("Backend URL", fontSize = 11.sp) },
+                placeholder = { Text("http://192.168.1.10:8000", fontSize = 11.sp) },
+                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    autoCorrectEnabled = false,
+                ),
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = { onApply(draft) },
+                    enabled = enabled && dirty,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Apply", fontSize = 12.sp) }
+                OutlinedButton(
+                    onClick = { onReset() },
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Reset to default", fontSize = 12.sp) }
+            }
+            Text(
+                "In use: $current",
+                fontSize = 10.sp,
+                color = if (dirty) RlAmber else RlSlate,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            if (dirty) {
+                Text(
+                    "Unapplied change. Press Apply to use it.",
+                    fontSize = 10.sp, color = RlAmber,
+                )
+            }
+        }
     }
 }
 
