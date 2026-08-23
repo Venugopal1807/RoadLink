@@ -26,3 +26,6 @@ local.properties
 # OS
 Thumbs.db
 .DS_Store
+
+# Submission artifacts (contain machine-specific backend URLs)
+submission_artifacts/
