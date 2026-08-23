@@ -1,202 +1,183 @@
 # Demo script
 
-A 2–5 minute demonstration. Setup is in [`setup.md`](setup.md).
+Two versions of the same demonstration. Setup is in [`setup.md`](setup.md).
 
-The demo never depends on staging a real crash. **CREATE TEST SOS** drives the
-identical pipeline a sensor trigger will use — signing, persistence, state
-machine, transport, backend, audit — and only the trigger is simulated. That
-fact is stamped into the signed packet and shown on screen as
-`SIMULATED TRIGGER`.
+| | When to use | BLE |
+|---|---|---|
+| **DEMO B** | Default. Use unless the hardware ladder has passed | Not used |
+| **DEMO A** | Only if `physical-test-results.md` records T5 and T6 passing | Shown as an addition |
+
+**DEMO B is the baseline and it is complete on its own.** DEMO A is DEMO B plus
+one extra scene. Neither depends on BLE working, and the core story is identical:
+
+> RoadLink does not assume connectivity. It preserves the emergency first, then
+> attempts delivery through whatever transport is available.
+
+The demo never stages a real crash. **CREATE TEST SOS** drives the same pipeline
+a sensor trigger will use (signing, persistence, state machine, transport,
+backend, audit); only the trigger is simulated, and the app labels it
+`SIMULATED TRIGGER` on screen.
+
+---
 
 ## Before you start
 
 ```bash
-# terminal 1
+# terminal 1 - backend, bound so the phone can reach it
 cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-# terminal 2 — the log is the evidence; keep it visible
+# terminal 2 - the log is the evidence, keep it on screen
 adb logcat -c && adb logcat -s RLINK
 ```
 
-On the Rider tab, set a known starting state:
+Build the app against the demo network, not the emulator loopback:
 
-- Delivery path selector: **AUTO**
-- Simulated relay in range: **off**
-- Force rider offline: **off**
-- Scripted relay failures: **0**
+```bash
+cd android && ./gradlew :app:assembleDebug -Proadlink.backendUrl=http://<LAN-IP>:8000
+```
 
-Press **Reset script**. If the device already holds emergencies from an earlier
-run, that is fine — they are never deleted, which is itself the point.
+Starting state on the Rider tab:
 
-> **Say what is real and what is not.** The demo is stronger for it, and every
-> label on screen already does this. If physical BLE has not been validated on
-> your hardware, say so plainly and run Scenario B — it carries the product
-> claim on its own.
+| Control | Set to |
+|---|---|
+| Delivery path | **AUTO** |
+| Simulated relay in range | **off** |
+| Force rider offline | **off** |
+| Scripted relay failures | **0** |
+| Arm physical BLE transport | **off** (DEMO B) / **on** (DEMO A, Phone A only) |
+
+Press **Reset script**. Emergencies left from an earlier run are fine; nothing
+deletes them, which is the point.
+
+> Say what is real and what is not. Every label on screen already does this, and
+> the demo is stronger for matching it.
 
 ---
 
-## Scene 1 — the problem (20s)
+# DEMO B — the guaranteed path (no BLE)
 
-No app yet. State it plainly:
+Runs on one phone. Nothing here can fail because of a radio.
 
-> A rider crashes on a highway. They may be unconscious, and they are often
-> exactly where there is no cellular signal. An app that needs a working network
-> at the moment of the crash does not solve the case that matters.
+### 2-minute sequence
 
-## Scene 2 — create a labelled emergency (20s)
+| # | Do | Say / show |
+|---|---|---|
+| 1 | Nothing yet | "A rider crashes on a highway. They may be unconscious, and they are often exactly where there is no signal. An app that needs a network at the moment of the crash does not solve the case that matters." |
+| 2 | Rider tab → **Force rider offline** ON | "First I take the network away, so you can see what happens when delivery cannot succeed." |
+| 3 | **CREATE TEST SOS** | Point at the `SIMULATED TRIGGER` badge. The trigger is a button; everything after it is the real pipeline. |
+| 4 | Log tab, top line | `PERSISTED <id> ... safe on disk before any delivery attempt` — "On disk before any delivery is attempted. The store has no delete, no purge and no expiry, so no code path can drop an emergency because delivery failed." |
+| 5 | Log tab, next lines | Each transport reports unavailable. Event sits at `QUEUED`. |
+| 6 | Responder tab | Empty. "That absence is honest. Nothing reached the backend, and the responder view reads the server, not this phone. The emergency is not lost, it is waiting." |
+| 7 | **Force rider offline** OFF. Touch nothing else | Within seconds: `ATTEMPT ... via DIRECT NETWORK (REAL)` → `HTTP 201` → `DELIVERED`. |
+| 8 | Responder tab | The emergency appears with its delivery path. "Nobody pressed anything. It delivered itself when a path existed." |
 
-Rider tab → **CREATE TEST SOS**.
+That is the whole claim, demonstrated. Steps 3–8 map to the required sequence:
+create → persist → no connectivity → stays queued → connectivity returns →
+automatic delivery → backend receives it → audit visible on the Rider card.
 
-Point at the `SIMULATED TRIGGER` badge. The trigger is a button; everything
-after it is the real pipeline.
+**Close (15s):**
 
-## Scene 3 — persisted before anything is transmitted (30s)
+> RoadLink stores the emergency locally before transmission and retries when a
+> transport becomes available. A nearby phone can also carry it over BLE. What is
+> proven end to end today is the durable offline path. The radio hop is
+> implemented but not yet measured on hardware, and the app refuses to report it
+> as working until it is.
 
-Log tab, first line:
+### Extending DEMO B to 4–5 minutes
 
-```
-PERSISTED <id> origin=SIMULATED - safe on disk before any delivery attempt
-```
+Add any of these after step 8. Pick two; do not run all four.
 
-> The emergency is on disk before any delivery is attempted. `EmergencyStore`
-> has no delete method, no purge and no expiry — nothing in the codebase is able
-> to drop an emergency because delivery failed.
-
-## Scene 4 — connectivity disappears (45s)
-
-**This is the scene that carries the product claim.**
-
-1. Rider tab → **Force rider offline** ON. (A switch rather than aeroplane mode:
-   a demo that depends on toggling radios in front of an audience is a demo that
-   fails.)
-2. **CREATE TEST SOS**.
-3. Log tab shows every transport reporting unavailable; the event sits at
-   `QUEUED`.
-4. Responder tab → the emergency is **not** there.
-
-> That absence is honest. Nothing has reached the backend, so the responder view
-> — which reads the server, not this phone — correctly shows nothing. The
-> emergency is not lost; it is waiting.
-
-## Scene 5 — connectivity returns (30s)
-
-Rider tab → **Force rider offline** OFF. Do nothing else.
-
-Within a few seconds the retry loop picks it up:
-
-```
-ATTEMPT <id> via DIRECT NETWORK (REAL) attempt=1
-direct upload of <id> accepted, HTTP 201
-DELIVERED <id> via DIRECT NETWORK
-```
-
-Responder tab → the emergency appears, with its delivery path.
-
-> Nobody pressed anything. The emergency survived the outage and delivered
-> itself when a path existed.
-
-## Scene 6 — the BLE relay
-
-**Run this scene only if the physical BLE ladder has passed on your hardware**
-(see [`physical-test-results.md`](physical-test-results.md)).
-
-*If it has passed:*
-
-1. Phone A: **Arm physical BLE transport** ON, **Force rider offline** ON,
-   delivery path pinned to **BLE**.
-2. Phone B: **Relay mode** ON, left online.
-3. Phone A: **CREATE TEST SOS**.
-
-Phone A reaches `RELAYED`. Phone B logs `RELAY took custody`, stores it, and
-uploads it over its own network. The backend shows delivery path `ble_relay`.
-
-> Phone A says RELAYED, not DELIVERED. A relay's acknowledgement means another
-> phone has custody — that phone may never regain connectivity — so the rider
-> keeps trying independently. The backend is idempotent, so that redundancy is
-> safe rather than duplicative.
-
-*If it has not passed — do not fake it.* Use the simulated relay instead:
-Rider tab → **Simulated relay in range** ON, delivery path pinned to
-**SIMULATED**, then **CREATE TEST SOS**. The log says `(no radio involved)` and
-the backend records `simulated_relay`. Say:
-
-> The BLE transport is implemented and tested at the protocol and orchestration
-> layer. Physical-device validation is pending, so this hop is simulated — and
-> the system labels it as simulated everywhere, right down to the wire path
-> stored in the database.
-
-## Scene 7 — the responder view (20s)
-
-Responder tab. Each emergency shows two independent badges: **trigger fidelity**
-and **delivery path**.
-
-> These are deliberately separate. A real sensor event delivered by the
-> simulator is still not evidence that the relay works, so the system never
-> collapses them into one "is this real" flag.
-
-Note also that location reads `no fix reported` rather than a placeholder
-coordinate when there is no GPS fix.
-
-## Scene 8 — technical evidence (45s)
-
-Pick two or three; do not run through all of them.
-
-**Idempotency.** On a delivered event, press **Submit again over direct network**.
-
-```
-REDELIVER <id> via DIRECT NETWORK -> ... duplicate=true
-```
+**Idempotency.** On the delivered event press **Submit again over direct
+network**. The log shows `duplicate=true`. Then:
 
 ```bash
 curl http://localhost:8000/api/v1/debug/audit
 ```
 
-One event row, two audit rows, `first_delivery_path` unchanged.
+One event row, two audit rows, `first_delivery_path` unchanged. "The rider and
+any number of relays may each submit the same emergency. The backend keeps one
+record and every delivery attempt. That redundancy is the design."
 
-**Durability.** Force-stop the app and reopen it. Queued emergencies are still
+**Durability.** Force-stop the app, reopen it. Queued emergencies are still
 there and the retry loop resumes on launch.
 
 **Retry with backoff.** Set **Scripted relay failures** to 2, pin the path to
-**SIMULATED**, create an SOS. It fails twice, is retained both times
-(`event retained, still queued`), and succeeds on the third attempt.
+**SIMULATED**, create an SOS. It fails twice, logs `event retained, still
+queued` both times, succeeds on the third attempt.
 
-**The audit trail.** Rider tab shows the real attempt count per event.
+**Architecture (30s, no app).** Show the layer diagram from
+[`architecture.md`](architecture.md) and make one point: nothing above
+`Transport.kt` imports a Bluetooth class, so BLE is a replaceable transport
+rather than the product.
 
-## Closing (15s)
+**The simulated relay, if asked about BLE.** Rider tab → **Simulated relay in
+range** ON, pin the path to **SIMULATED**, create an SOS. The log says
+`(no radio involved)` and the backend records the path as `simulated_relay`,
+never `ble_relay`.
 
-> RoadLink stores an emergency locally before transmission and retries delivery
-> when connectivity becomes available. A nearby phone can also receive the event
-> over BLE and forward it later. What is proven today is the durable offline
-> path, end to end. What is implemented but not yet proven on hardware is the
-> phone-to-phone radio hop — and the app refuses to report that as working until
-> it has been measured.
+> "The BLE transport is implemented and tested at the protocol and orchestration
+> layer. Physical validation is pending, so this hop is simulated, and the system
+> labels it as simulated everywhere down to the wire path in the database."
+
+---
+
+# DEMO A — with physically validated BLE
+
+**Only run this if [`physical-test-results.md`](physical-test-results.md)
+records T5 and T6 passing on your hardware.** If it does not, run DEMO B and say
+so. Do not present a simulated relay as a radio hop.
+
+Run DEMO B steps 1–8 first, then add the scene below. Two phones, one APK.
+
+**Setup:** Phone A — **Arm physical BLE transport** ON, **Force rider offline**
+ON, delivery path pinned to **BLE**. Phone B — **Relay mode** ON, left online.
+
+| # | Do | Show |
+|---|---|---|
+| 9 | Phone A: **CREATE TEST SOS** | A: `BLE advertising ...` |
+| 10 | Wait | B: `RELAY found emergency ...` → `RELAY read verified packet` → `RELAY took custody ...` |
+| 11 | Phone A screen | Reaches **RELAYED**, not DELIVERED |
+| 12 | Phone B, still online | `ATTEMPT ... via DIRECT NETWORK` → `DELIVERED` |
+| 13 | Responder tab | Emergency present, delivery path `ble_relay` |
+
+> "Phone A says RELAYED, not DELIVERED. A relay's acknowledgement means another
+> phone has custody, and that phone may never regain connectivity. So the rider
+> keeps trying independently, which is safe because the backend is idempotent."
+
+Two details worth one sentence each if there is time:
+
+- Phone B verified the signature before storing, so a relay cannot be used to
+  inject emergencies into the backend.
+- Phone B withheld the acknowledgement until the write succeeded, because the
+  rider may stop advertising once acknowledged.
+
+**Quote the measured relay success rate only with its sample size and the phone
+models it came from.** If T6 has not been run 30 times, do not quote a rate.
 
 ---
 
 ## Timing
 
-| Scene | Target |
+| | DEMO B | DEMO A |
+|---|---|---|
+| Problem statement | 0:20 | 0:20 |
+| Offline → queued | 0:50 | 0:50 |
+| Reconnect → delivered | 0:35 | 0:35 |
+| Close | 0:15 | 0:15 |
+| **Core total** | **2:00** | **2:00** |
+| Extensions | +1:30 | — |
+| BLE relay scene | — | +1:30 |
+| Architecture | +0:30 | +0:30 |
+| **Full** | **~4:00** | **~4:00** |
+
+The 2-minute core is the priority. Everything else is optional.
+
+## If something goes wrong
+
+| Symptom | Do this |
 |---|---|
-| 1 — problem | 0:20 |
-| 2 — create | 0:20 |
-| 3 — persisted | 0:30 |
-| 4 — offline | 0:45 |
-| 5 — reconnect | 0:30 |
-| 6 — relay | 0:45 |
-| 7 — responder | 0:20 |
-| 8 — evidence | 0:45 |
-| close | 0:15 |
-| | **~4:30** |
-
-For a hard 2-minute cut, keep scenes 1, 3, 4, 5 and the close. Scenario B alone
-is the product claim.
-
-## If something goes wrong on stage
-
-- **Delivery does not resume after re-enabling the network** — press **Deliver
-  now** rather than waiting for the loop.
-- **The backend is unreachable** — the Responder tab shows it. Restart uvicorn;
-  the queued emergencies are still on the phone and will deliver themselves.
-- **Anything BLE misbehaves** — pin the delivery path to **NETWORK** and
-  continue. That the product still works without BLE is the argument, not a
-  climbdown.
+| Delivery does not resume after re-enabling network | Press **Deliver now** instead of waiting for the 3s loop |
+| Backend unreachable | The Responder tab reports it. Restart uvicorn; queued emergencies are still on the phone and deliver themselves |
+| Phone cannot reach the backend | The APK was probably built with the emulator default. Rebuild with `-Proadlink.backendUrl=http://<LAN-IP>:8000` |
+| Anything BLE misbehaves | Pin the delivery path to **NETWORK** and continue. That the product works without BLE is the argument, not a retreat |
+| Wrong tab state after a rehearsal | **Reset script**, then set the starting-state table above |

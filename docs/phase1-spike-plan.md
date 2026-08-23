@@ -1,5 +1,15 @@
 # RoadLink — Phase 1 Technical Spike Plan
 
+> **Historical document, kept for the protocol decisions it records.**
+> Written 2026-08-21, before the product existed. Its environment assessment and
+> its blocker list describe that day, not today. For current state read
+> [`current-project-status.md`](current-project-status.md); for what the system
+> became read [`architecture.md`](architecture.md).
+>
+> Sections still referenced by current documents and code: §C.4 and §F (BLE
+> advertisement and GATT design), §C.5 (why emulator results do not freeze a
+> communication design), §A.3 (why minSdk is 26).
+
 **Status:** Pre-implementation assessment. Nothing in this document is a measured result.
 Every number is either (a) a value fixed by the Bluetooth Core Spec / Android API contract, or
 (b) explicitly marked `TO BE MEASURED`.
@@ -15,7 +25,7 @@ Every number is either (a) a value fixed by the Bluetooth Core Spec / Android AP
 
 | Component | Version | How verified |
 |---|---|---|
-| Android SDK root | `C:\Users\91630\AppData\Local\Android\Sdk` | `ANDROID_HOME` set |
+| Android SDK root | `%LOCALAPPDATA%\Android\Sdk` | `ANDROID_HOME` set |
 | Platform APIs | android-31, 34, 35, 36 | dir listing |
 | Build-tools | 34.0.0, 35.0.0, 35.0.1, 36.0.0, 36.1.0 | dir listing |
 | platform-tools (adb) | 36.0.0 | `source.properties` |

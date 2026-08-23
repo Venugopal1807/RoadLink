@@ -62,14 +62,18 @@ Re-run on 2026-08-23. Commands are in [`testing.md`](testing.md).
 | Suite | Result | Evidence class |
 |---|---|---|
 | Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP against live uvicorn |
-| Android JVM unit tests | **60 passed, 0 failed** | JVM |
+| Android JVM unit tests | **62 passed, 0 failed** | JVM |
 | Kotlin ↔ Python wire compatibility | **PASSED**, `sig_valid=true` | Real HTTP |
 | `:app:assembleDebug` | BUILD SUCCESSFUL | |
 | `:app:assembleDebugAndroidTest` | BUILD SUCCESSFUL | |
 | `:spike-ble:assembleDebug` | BUILD SUCCESSFUL | |
 
 JVM test breakdown: BLE protocol 15, delivery invariants 8, delivery scenarios
-12, relay handoff 8, canonical signing 10, envelope 7.
+12, relay handoff 10, canonical signing 10, envelope 7.
+
+**Instrumented tests were not re-run in this session** (`adb devices` empty).
+Their 8/8 figure is the earlier EMULATED result, carried forward and labelled as
+such rather than re-observed.
 
 ## 4. Emulator-only evidence
 

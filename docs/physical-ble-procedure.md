@@ -46,6 +46,33 @@ it even with `neverForLocation`, which T3 measures rather than assumes.
 
 ### Record the devices first
 
+Read these from the phones rather than from memory. Run once per serial:
+
+```bash
+adb devices -l
+
+# then, for each serial:
+adb -s <SERIAL> shell getprop ro.product.manufacturer   # OEM
+adb -s <SERIAL> shell getprop ro.product.model          # model
+adb -s <SERIAL> shell getprop ro.build.version.release  # Android version
+adb -s <SERIAL> shell getprop ro.build.version.sdk      # API level
+adb -s <SERIAL> shell getprop ro.build.version.security_patch
+```
+
+One line per phone, if you prefer:
+
+```bash
+for S in <SERIAL_A> <SERIAL_B>; do
+  echo "$S $(adb -s $S shell getprop ro.product.manufacturer) \
+$(adb -s $S shell getprop ro.product.model) \
+Android $(adb -s $S shell getprop ro.build.version.release) \
+API $(adb -s $S shell getprop ro.build.version.sdk)"
+done
+```
+
+Copy the output into
+[`physical-test-results.md`](physical-test-results.md) § *Devices under test*.
+
 | | Phone A | Phone B |
 |---|---|---|
 | `adb devices -l` serial | | |

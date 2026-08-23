@@ -1,15 +1,19 @@
 # RoadLink
 
-Offline-first emergency delivery for two-wheeler crashes.
+A durable emergency-delivery system that preserves an emergency locally and
+opportunistically delivers it through whatever transport is available.
 
 > **RoadLink keeps the emergency alive even when connectivity disappears.**
 
 A rider who has crashed may be unable to call for help, and is often exactly
-where the network is not. RoadLink detects or receives an emergency, **writes it
-to disk before attempting any delivery**, and then delivers it by whatever path
-exists — a nearby phone acting as a BLE relay, or the rider's own network when
-it returns. If nothing is available, the emergency waits. It is never discarded
+where the network is not. RoadLink takes a confirmed emergency, **writes it to
+disk before attempting any delivery**, and then delivers it by whatever path
+exists: the rider's own network when it returns, or a nearby phone acting as a
+BLE relay. If nothing is available, the emergency waits. It is never discarded
 because delivery failed.
+
+In this build an emergency is confirmed by a button, not by a sensor. Crash
+detection is not implemented; see the status table below.
 
 **BLE is not the product.** Offline-first delivery is. BLE is the opportunistic
 mechanism that extends delivery when another phone is nearby.
@@ -148,7 +152,7 @@ Bind `0.0.0.0` so phones can reach it over the LAN. Find the host IP with
 
 ```bash
 cd android
-./gradlew :app:testDebugUnitTest       # 60 JVM tests
+./gradlew :app:testDebugUnitTest       # 62 JVM tests
 ./gradlew :app:assembleDebug
 
 # point the app at your machine instead of the emulator loopback:
@@ -173,27 +177,33 @@ mismatch does not error, it just stores every emergency with `sig_valid=false`.
 
 ## Demo
 
-All three paths use the same state machine, the same persistence and the same
-audit trail. Only the transport differs.
+Full script, both variants: [`docs/demo-script.md`](docs/demo-script.md).
+
+All paths use the same state machine, the same persistence and the same audit
+trail. Only the transport differs.
 
 | Path | Setup | Shows |
 |---|---|---|
-| **Primary** — real phone-to-phone BLE | Two devices, after S0–S5 pass | The differentiating capability |
-| **Secondary** — simulated relay | Relay in range = on | The full pipeline, labelled SIMULATED |
-| **Fallback** — offline queue → reconnect | Relay off, forced offline, then online | *"RoadLink does not lose the SOS"* |
+| **Baseline** — offline queue → reconnect | Relay off, forced offline, then online | The product claim, and it needs no radio |
+| **Enhancement** — real phone-to-phone BLE | Two devices, only after the hardware ladder passes | The differentiating capability |
+| **Development** — simulated relay | Relay in range = on | The full pipeline, labelled SIMULATED throughout |
 
 The demo never depends on staging a real crash. **CREATE TEST SOS** drives the
-identical pipeline a sensor trigger will use — signing, persistence, state
-machine, transport, backend, audit — and only the trigger is simulated.
+identical pipeline a sensor trigger will use (signing, persistence, state
+machine, transport, backend, audit) and only the trigger is simulated.
 
-**Scenario B, the one that carries the product claim:**
+**The baseline sequence, which carries the product claim:**
 
 1. Rider tab → turn *relay in range* **off** and *force rider offline* **on**
-2. **CREATE TEST SOS** → the event shows `QUEUED`; nothing reaches the backend
+2. **CREATE TEST SOS** → the event is persisted, then shows `QUEUED`; nothing
+   reaches the backend
 3. Responder tab → no emergency (correct: it genuinely has not arrived)
 4. Turn *force rider offline* **off**
 5. Within seconds the event moves to `DELIVERED` via `DIRECT NETWORK`
 6. Responder tab → the emergency appears, with its delivery path shown
+
+Because BLE is a transport rather than the product, the demonstration above is
+unaffected by whether the radio path has been validated.
 
 ---
 

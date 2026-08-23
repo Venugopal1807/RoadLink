@@ -162,7 +162,7 @@ the clock running.
 | Suite | Result | Command |
 |---|---|---|
 | Backend | 61 passed, 0 failed | `python backend/tests/test_idempotency.py` |
-| Android JVM | 60 passed, 0 failed | `./gradlew :app:testDebugUnitTest` |
+| Android JVM | 62 passed, 0 failed | `./gradlew :app:testDebugUnitTest` |
 | Android instrumented | 8 passed, 0 failed *(emulated)* | `./gradlew :app:connectedDebugAndroidTest` |
 | Kotlin ↔ Python wire | PASSED, `sig_valid=true` | `python tools/verify_wire_compat.py` |
 
@@ -310,6 +310,63 @@ Three places where the docs had drifted from what the code does:
 Nothing about BLE, and nothing new about persistence. No radio was involved, no
 device was attached, and no instrumented test was executed. The fix above is
 covered by JVM tests only.
+
+---
+
+## 2026-08-23 — Submission freeze audit
+
+Second pass the same day, for submission readiness. No architecture changed, no
+product feature added.
+
+### Re-run results
+
+| Suite | Result | Environment |
+|---|---|---|
+| Backend | 61 passed, 0 failed | Real HTTP, live uvicorn |
+| Android JVM | **62 passed, 0 failed** | JVM |
+| `:app:assembleDebug` with `-Proadlink.backendUrl` | BUILD SUCCESSFUL | |
+
+Instrumented suite **not** re-run: `adb devices` was empty again. Its 8/8 figure
+remains the emulator result recorded above.
+
+### Fallback matrix given explicit test coverage
+
+The audit checked the required fallback behaviour against the test suite and
+found one case uncovered: a **disarmed** BLE transport. The existing forced-
+transport test covered BLE *failing*, not BLE reporting itself *unavailable* —
+which is the pre-check path, and the path modified by the previous session's
+fix. Two tests added to `RelayHandoffTest`:
+
+- `a disarmed BLE transport cannot produce a BLE success` — asserts the
+  transport is never called, `deliveredVia` stays null, `relayedTo` stays null,
+  the rendered status stays `QUEUED`, the event stays on disk, and every audit
+  row for that transport is `UNAVAILABLE` rather than a success or a handoff.
+- `an unavailable BLE transport falls through to the network in the same pass`.
+
+Nothing failed before these were added; they close a coverage gap rather than
+fix a defect.
+
+### Build configuration verified
+
+`-Proadlink.backendUrl` was confirmed to reach the shipped binary, not just the
+Gradle model: an APK built with an override carried that URL in `classes4.dex`.
+A Gradle warning now fires when a build uses the emulator default
+`http://10.0.2.2:8000`, because such an APK reaches nothing from a real phone
+and the failure would first appear on demo hardware.
+
+**The APK was NOT installed or launched** — no device was attached. Whether it
+installs and starts on a physical phone is UNKNOWN.
+
+### Documentation
+
+Removed a machine-specific SDK path containing a username from
+`phase1-spike-plan.md`, and marked that document as a historical snapshot so its
+2026-08-21 blocker list is not read as current state.
+
+### What this session does NOT prove
+
+Nothing about BLE, nothing about physical devices, nothing about installation.
+No radio, no handset, no instrumented run.
 
 ---
 

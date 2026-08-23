@@ -9,7 +9,7 @@ is the how and the why.
 | Suite | Command | Count | Environment |
 |---|---|---|---|
 | Backend ingestion | `python backend/tests/test_idempotency.py` | 61 assertions | Real HTTP, live uvicorn |
-| Android JVM | `./gradlew :app:testDebugUnitTest` | 60 tests | JVM |
+| Android JVM | `./gradlew :app:testDebugUnitTest` | 62 tests | JVM |
 | Android instrumented | `./gradlew :app:connectedDebugAndroidTest` | 8 tests | Device or emulator |
 | Cross-language wire | `python tools/verify_wire_compat.py` | 6 checks | Real HTTP |
 | Build | `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :spike-ble:assembleDebug` | — | |
@@ -42,7 +42,7 @@ it.
 The server is started on a throwaway port against a temporary database, so the
 suite never touches a development database.
 
-## Android JVM — 60 tests
+## Android JVM — 62 tests
 
 ```bash
 cd android
@@ -56,7 +56,7 @@ cd android
 |---|---|---|
 | `DeliveryInvariantTest` | 8 | Persist-before-transmit, asserted on operation **order**; a failed write transmits nothing; the state machine has exactly one terminal state and no stranded states |
 | `DeliveryScenarioTest` | 12 | Scenarios A–E through the real `DeliveryManager` and real transports; backoff growth and capping; unavailable transports are recorded once, not per pass |
-| `RelayHandoffTest` | 8 | A relay ACK produces `RELAYED`, never `DELIVERED`; the event stays pending; the ACK is withheld until the write succeeds |
+| `RelayHandoffTest` | 10 | A relay ACK produces `RELAYED`, never `DELIVERED`; the event stays pending; a **disarmed BLE transport cannot produce a BLE success** and falls through to the network in the same pass |
 | `BleProtocolTest` | 15 | Beacon codec pinned byte-for-byte; packet round trip; tamper rejection; the beacon contains no identity, coordinates or raw event_id |
 | `CanonicalTest` | 10 | The Kotlin canonical string matches vectors generated from the Python backend |
 | `EnvelopeTest` | 7 | The HTTP envelope shape, and it writes the fixture the wire check consumes |

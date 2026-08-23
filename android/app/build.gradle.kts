@@ -23,14 +23,23 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // The backend base URL. Overridable per build without touching code.
+        // The backend base URL. Overridable per build without touching code, so
+        // no machine-specific address is ever committed.
         // 10.0.2.2 is the host loopback as seen from an Android emulator; on a
         // physical phone this must be the LAN IP of the machine running uvicorn.
-        buildConfigField(
-            "String",
-            "BACKEND_BASE_URL",
-            "\"${project.findProperty("roadlink.backendUrl") ?: "http://10.0.2.2:8000"}\"",
-        )
+        val emulatorDefault = "http://10.0.2.2:8000"
+        val backendUrl = (project.findProperty("roadlink.backendUrl") as String?) ?: emulatorDefault
+        if (backendUrl == emulatorDefault) {
+            // An APK built with this default reaches nothing from a real phone,
+            // and the failure only shows up on the demo hardware. Warn loudly
+            // rather than let a submission build ship pointed at the emulator.
+            logger.warn(
+                "RoadLink: BACKEND_BASE_URL is the emulator default ($emulatorDefault). " +
+                    "For a physical phone rebuild with " +
+                    "-Proadlink.backendUrl=http://<LAN-IP>:8000"
+            )
+        }
+        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendUrl\"")
     }
 
     buildTypes {
