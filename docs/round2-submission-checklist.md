@@ -14,7 +14,7 @@ strength of a plan.
 | 3 | **Documentation** | **READY** | 15 documents under `docs/`, indexed from the README |
 | 4 | **Deployed / working demo** | **PENDING** | Blueprint and Dockerfile added; **no service deployed**. LAN demo path is verified. See [`deployment.md`](deployment.md) |
 | 5 | **PPT** | **PENDING** | Slide source written at [`submission-presentation.md`](submission-presentation.md); the deck file itself must be produced |
-| 6 | **Demo video** | **PENDING** | Script ready at [`demo-script.md`](demo-script.md); not recorded |
+| 6 | **Demo video** | **PENDING** | Recording instructions ship in the submission package (`05_Demo/Demo_Instructions.md`); not recorded |
 
 ## Detailed items
 
@@ -78,7 +78,8 @@ Re-run 2026-08-23.
 ## What must still be done by hand
 
 1. **Record the demo video.** Follow the primary demo in
-   [`demo-script.md`](demo-script.md). Steps 3–11 carry the claim.
+   `05_Demo/Demo_Instructions.md` in the submission package. Steps 3-11 carry
+   the claim.
 2. **Produce the deck** from [`submission-presentation.md`](submission-presentation.md).
 3. **Install the APK on a phone and launch it.** The single largest untested
    assumption in the submission.

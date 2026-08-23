@@ -211,7 +211,9 @@ mismatch does not error, it just stores every emergency with `sig_valid=false`.
 
 ## Demo
 
-Full script, both variants: [`docs/demo-script.md`](docs/demo-script.md).
+The sequence below is the demo. Step-by-step recording instructions, with the
+exact log output to expect, ship in the submission package as
+`05_Demo/Demo_Instructions.md`.
 
 All paths use the same state machine, the same persistence and the same audit
 trail. Only the transport differs.
@@ -265,7 +267,6 @@ isolating which side of a BLE failure is at fault.
 | [`current-project-status.md`](docs/current-project-status.md) | What is implemented, verified, emulator-only, untested, and blocking |
 | [`architecture.md`](docs/architecture.md) | How the system is built, and why |
 | [`setup.md`](docs/setup.md) | Clean checkout to running app, plus troubleshooting |
-| [`demo-script.md`](docs/demo-script.md) | The 2–5 minute demonstration, scene by scene |
 | [`testing.md`](docs/testing.md) | How to run each suite and what each one proves |
 | [`limitations.md`](docs/limitations.md) | What RoadLink does not do and may not claim |
 | [`security.md`](docs/security.md) | Threat model, packet integrity, BLE privacy, prototype shortcuts |
