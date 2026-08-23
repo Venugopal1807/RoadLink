@@ -133,6 +133,40 @@ A real sensor event delivered by the simulator is *not* BLE evidence. The
 flip it without invalidating the packet. Simulated deliveries are recorded
 against their own wire path, `simulated_relay` — never `ble_relay`.
 
+### Core workflow
+
+```
+1. Emergency confirmed        simulated trigger today; sensor engine not written
+2. Signed                     HMAC over a canonical string, event_id fixed here
+3. Written to disk            survives process death, reinstall, battery pull
+4. Delivery attempted         direct network → BLE relay → simulated relay
+     ├── backend accepts   → DELIVERED        (terminal)
+     ├── relay takes it    → RELAYED          (custody, still pending)
+     └── nothing available → QUEUED_OFFLINE   (retried, never dropped)
+5. Retry loop                 every 3s, backoff 1s → 30s cap, resumes on launch
+6. Responder reads the backend, not the device
+```
+
+Step 3 completes before step 4 begins. That ordering is the product.
+
+---
+
+## Technology stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| App | Kotlin, Jetpack Compose, minSdk 26 | API 26 is the floor for the BLE peripheral role |
+| Persistence | Room over SQLite, `synchronous = FULL` | A committed write has reached disk before it returns |
+| Concurrency | Kotlin coroutines | The delivery loop and BLE callbacks |
+| Radio | Android BLE — advertiser, GATT server, scanner, GATT client | No third-party BLE library; the platform API directly |
+| Signing | HMAC-SHA256 truncated to 128 bits | Mirrored in Kotlin and Python, pinned by cross-language tests |
+| Backend | FastAPI, Pydantic, `uvicorn` | |
+| Backend storage | stdlib `sqlite3`, WAL, no ORM | One obvious swap point for PostgreSQL |
+| Backend tests | stdlib `urllib` against a live server | No pytest or httpx; zero install risk |
+| Build | Gradle 9, AGP 8.13, KSP | |
+
+No dependency was added that the product does not use.
+
 ---
 
 ## Running it
@@ -238,8 +272,47 @@ isolating which side of a BLE failure is at fault.
 | [`verification-log.md`](docs/verification-log.md) | Observed results, and what each does *not* prove |
 | [`physical-ble-procedure.md`](docs/physical-ble-procedure.md) | The T1–T11 hardware ladder |
 | [`physical-test-results.md`](docs/physical-test-results.md) | Its results sheet — currently all NOT YET TESTED |
-| [`submission-checklist.md`](docs/submission-checklist.md) | Round 2 submission state |
+| [`deployment.md`](docs/deployment.md) | Hosting the backend, and the LAN fallback |
+| [`round2-submission-checklist.md`](docs/round2-submission-checklist.md) | Round 2 submission state, item by item |
+| [`submission-presentation.md`](docs/submission-presentation.md) | Slide-by-slide source for the deck |
 | [`ADR-002`](docs/decisions/ADR-002-transport-abstraction.md) | Why delivery sits behind a transport abstraction |
+
+---
+
+## Security
+
+Full account in [`docs/security.md`](docs/security.md). In brief:
+
+- Every emergency is **signed at creation**, before it is persisted or sent. A
+  relay verifies the signature before storing and **drops anything that fails**,
+  so a relay cannot be used to inject emergencies into the backend.
+- The `simulated` flag is **inside** the signature and cannot be flipped
+  downstream without invalidating the packet.
+- The BLE advertisement carries **no identity, no coordinates and not the raw
+  event id** — only a truncated one-way hash. The emergency itself travels only
+  over the connected GATT link.
+- Rider identity is an opaque random value. No name, phone number or email; the
+  packet schema has no field for them.
+
+Prototype shortcuts, stated rather than hidden: a shared HMAC key compiled into
+the app is **not** key management, there is no authentication on any backend
+endpoint, and debug builds permit cleartext HTTP because the prototype backend
+has no certificate. Release builds deny it.
+
+---
+
+## Roadmap
+
+In order, and none of it claimed as done:
+
+1. **Physical BLE validation** on two handsets, via the existing T1–T11
+   procedure. Every result cell is currently empty by design.
+2. **Sensor-based crash detection.** The trigger interface exists; the detection
+   engine is not written.
+3. **Per-device Ed25519 keys** in the Android Keystore, replacing the shared
+   HMAC key. The signing call site is already a single function.
+4. **A foreground service**, so delivery continues without the app open.
+5. **PostgreSQL** in place of SQLite. `backend/app/db.py` is the swap point.
 
 ---
 
