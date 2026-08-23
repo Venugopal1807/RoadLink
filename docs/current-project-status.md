@@ -148,11 +148,13 @@ returns. Covered by two new tests in `DeliveryScenarioTest`.
 Tracked in [`submission-checklist.md`](submission-checklist.md). The ones that
 need a human, not a code change:
 
-1. Demo video — not recorded.
-2. Presentation deck — not in the repository.
-3. Physical BLE validation — not run.
-4. Project/demo URL and repository URL — not verified.
-5. Portal and Google Form submissions — not prepared.
+1. Demo video: not recorded.
+2. Presentation deck: not in the repository.
+3. Physical BLE validation: not run.
+4. The APK has never been installed or launched on a physical phone.
+5. Portal and Google Form submissions: not prepared.
+
+Source repository: `github.com/Venugopal1807/RoadLink`, branch `main`.
 
 ## 10. Recommended final scope
 

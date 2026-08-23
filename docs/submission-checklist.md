@@ -20,7 +20,7 @@ in the row.
 | `[ ]` | **Demo video** | **NOT RECORDED. You must produce this.** |
 | `[~]` | **Working APK** | Builds successfully and carries the configured URL. **Never installed or launched on a physical phone — UNKNOWN** |
 | `[~]` | **Backend deployment / working endpoint** | Runs locally on LAN. **No hosted deployment exists.** If the submission needs a public URL, you must deploy it |
-| `[ ]` | **Git repository** | Local only. **No remote configured.** See [Phase 7 below](#git) |
+| `[x]` | **Git repository** | Pushed to `github.com/Venugopal1807/RoadLink`, branch `main`, 10 commits |
 | `[x]` | **Demo credentials** | **None required.** No accounts, no login, no API keys anywhere in the product |
 | `[x]` | **No secrets** | Scanned: no API keys, tokens, passwords, private keys or personal credentials in tracked files |
 | `[x]` | **No AI attribution** | Scanned across source, comments, docs, UI strings and all commit messages |
@@ -88,13 +88,14 @@ Nothing below can be produced from the repository.
    boundaries.
 2. **Demo video.** Record DEMO B from [`demo-script.md`](demo-script.md). Scenes
    1–8 of the 2-minute sequence carry the whole claim.
-3. **Git remote, and the push.** Not created automatically, by instruction.
-4. **A reachable backend endpoint,** if the submission requires a live URL
-   rather than a local demo.
-5. **Physical BLE validation,** or an explicit statement that it is pending.
+3. **A reachable backend endpoint,** if the submission requires a live URL
+   rather than a local demo. The prototype runs on a LAN only.
+4. **Physical BLE validation,** or an explicit statement that it is pending.
    Either is acceptable; silence is not.
-6. **Project/demo URL and repository URL,** verified reachable by someone who is
-   not you.
+5. **Confirm the repository is reachable** by someone who is not you (open it
+   in a private browser window; it may still be a private repo).
+6. **Install and launch the APK on a physical phone.** It builds and carries the
+   configured URL, but has never been run on hardware.
 7. **Google Form and Prasunet portal submissions.**
 
 ## Final pre-submission sequence
