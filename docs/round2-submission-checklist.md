@@ -95,7 +95,7 @@ Re-run 2026-08-23.
 ```bash
 # 1. all suites green
 cd backend && python tests/test_idempotency.py          # expect 61 passed
-cd ../android && ./gradlew :app:testDebugUnitTest --rerun   # expect 73 tests
+cd ../android && ./gradlew :app:testDebugUnitTest --rerun   # expect 88 tests
 cd .. && python tools/verify_wire_compat.py             # expect PASSED
 
 # 2. build the demo APK against the backend you will actually use

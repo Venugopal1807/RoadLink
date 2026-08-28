@@ -53,6 +53,8 @@ the event.
 | FastAPI ingestion + idempotency + audit | Yes | SQLite, WAL |
 | Responder interface | Yes | Reads the backend, not local state |
 | Rider interface + demo controls | Yes | |
+| Rider status vocabulary (6 states) | Yes | `RiderStatus`, incl. FAILED BUT RETAINED |
+| Per-emergency custody timeline | Yes | `CustodyTimeline`, derived only from stored rows |
 | **Sensor crash detection** | **No** | `TestCrashDetector` only; the trigger interface exists |
 
 ## 3. What has been verified, and how
@@ -62,7 +64,7 @@ Re-run on 2026-08-23. Commands are in [`testing.md`](testing.md).
 | Suite | Result | Evidence class |
 |---|---|---|
 | Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP against live uvicorn |
-| Android JVM unit tests | **67 of 73 passed, 0 failed** (2026-08-28) | JVM, Android-free subset — see the environment note in [`verification-log.md`](verification-log.md) |
+| Android JVM unit tests | **82 of 88 passed, 0 failed** (2026-08-28) | JVM, Android-free subset — see the environment note in [`verification-log.md`](verification-log.md) |
 | Kotlin ↔ Python wire compatibility | **PASSED**, `sig_valid=true` | Real HTTP |
 | `:app:assembleDebug` | BUILD SUCCESSFUL | |
 | `:app:assembleDebugAndroidTest` | BUILD SUCCESSFUL | |
@@ -70,11 +72,11 @@ Re-run on 2026-08-23. Commands are in [`testing.md`](testing.md).
 
 JVM test breakdown: BLE protocol 15, delivery invariants 8, delivery scenarios
 12, relay handoff 10, delivery recovery 5, canonical signing 10, envelope 7,
-backend-address handling 6.
+backend-address handling 6, rider status 8, custody timeline 7.
 
 The 2026-08-23 figures came from the full `:app:testDebugUnitTest`. The
 2026-08-28 re-run used a JVM harness over the Android-free sources because no
-Android SDK was available, so it covers 67 of the 73 and excludes
+Android SDK was available, so it covers 82 of the 88 and excludes
 `BackendConfigTest`. **The full Gradle suite has not been run since the
 2026-08-28 change.**
 
