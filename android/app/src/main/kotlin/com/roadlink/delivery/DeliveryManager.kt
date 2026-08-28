@@ -126,8 +126,18 @@ class DeliveryManager(
                 queued++
                 continue
             }
-            val result = deliver(event)
-            if (result.state == DeliveryState.DELIVERED) delivered++ else queued++
+            // Each emergency is isolated. One that cannot even be attempted
+            // must never abort the pass, because the events behind it in the
+            // queue would then never be tried either - an unbounded outage
+            // caused by a single bad record.
+            val outcome = runCatching { deliver(event) }
+            outcome.onFailure { error ->
+                log(
+                    "could not attempt ${event.eventId.take(8)}: " +
+                        "${error.message ?: error.javaClass.simpleName} - event retained, still queued"
+                )
+            }
+            if (outcome.getOrNull()?.state == DeliveryState.DELIVERED) delivered++ else queued++
         }
         PassResult(considered = pending.size, delivered = delivered, stillQueued = queued)
     }
@@ -144,7 +154,7 @@ class DeliveryManager(
     suspend fun deliver(event: EmergencyEvent): EmergencyEvent {
         if (event.state == DeliveryState.DELIVERED) return event
 
-        var current = event
+        var current = recoverIfInterrupted(event)
 
         // A forced transport narrows the cascade but changes nothing else:
         // same state machine, same persistence, same audit trail.
@@ -248,6 +258,65 @@ class DeliveryManager(
         return current
     }
 
+    // ---------------------------------------------------------------- recovery
+
+    /**
+     * Return an emergency that was interrupted mid-flight to the retryable
+     * resting state, so it can be delivered rather than being stuck forever.
+     *
+     * An attempt is written to disk BEFORE the transport is called, because an
+     * attempt recorded only after the fact cannot be audited if the phone dies
+     * during it. The consequence is that DELIVERY_ATTEMPT is the on-disk state
+     * for the whole time a transport is working - a five-second connect
+     * timeout, a twenty-second advertising window. Being killed inside that
+     * window is the likely case, not the unlucky one.
+     *
+     * Such an event is still pending, so the next launch picks it up, and
+     * QUEUED_OFFLINE is the only state a delivery attempt may begin from.
+     * Without this step the pass threw on it every three seconds forever and
+     * the emergency was never delivered - which is the product's central
+     * promise, broken by exactly the interruption the product exists to
+     * survive.
+     *
+     * Recovery happens here rather than only at startup so it covers every
+     * entry point into delivery. The interruption is recorded rather than
+     * quietly repaired: the attempt did happen, and its outcome is genuinely
+     * unknown.
+     */
+    private suspend fun recoverIfInterrupted(event: EmergencyEvent): EmergencyEvent {
+        if (event.state == DeliveryState.QUEUED_OFFLINE || event.state == DeliveryState.RELAYED) {
+            return event
+        }
+
+        val interruptedTransport = event.activeTransport
+        val recovered = event.transitionTo(
+            DeliveryState.QUEUED_OFFLINE,
+            at = clock.now(),
+            error = interruptedTransport?.let {
+                "${it.label}: interrupted before the outcome was known"
+            },
+        )
+        store.update(recovered)
+
+        if (interruptedTransport != null) {
+            // Only a real attempt gets an audit row. An emergency interrupted
+            // before it was ever queued had no transport and nothing to report.
+            recordAttempt(
+                event = recovered,
+                transport = interruptedTransport,
+                outcome = AttemptOutcome.INTERRUPTED,
+                detail = "attempt ${event.attemptCount} interrupted by shutdown; outcome unknown",
+            )
+            log(
+                "RECOVERED ${event.eventId.take(8)} - attempt ${event.attemptCount} via " +
+                    "${interruptedTransport.label} was interrupted; back in the retry queue"
+            )
+        } else {
+            log("RECOVERED ${event.eventId.take(8)} - confirmed but never queued; back in the retry queue")
+        }
+        return recovered
+    }
+
     /**
      * Deliberately re-submit an already-delivered event over another transport.
      *
@@ -346,12 +415,19 @@ class DeliveryManager(
         transport: Transport,
         outcome: AttemptOutcome,
         detail: String?,
+    ) = recordAttempt(event, transport.kind, outcome, detail)
+
+    private suspend fun recordAttempt(
+        event: EmergencyEvent,
+        transport: TransportKind,
+        outcome: AttemptOutcome,
+        detail: String?,
     ) {
         store.appendAttempt(
             DeliveryAttempt(
                 eventId = event.eventId,
                 at = clock.now(),
-                transport = transport.kind,
+                transport = transport,
                 outcome = outcome,
                 detail = detail,
             )

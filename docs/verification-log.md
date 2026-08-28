@@ -424,6 +424,98 @@ Nothing about BLE. No radio, no handset, no instrumented run.
 
 ---
 
+## 2026-08-28 — Interrupted-delivery defect, found and fixed
+
+### Environment note, stated first because it bounds everything below
+
+This session ran in a container with **no Android SDK and no access to Google's
+Maven repository**, so `dl.google.com` was unreachable and AGP, AndroidX, Room
+and Compose could not be resolved. `:app:testDebugUnitTest`, `assembleDebug` and
+any instrumented run were therefore **impossible here** and were not attempted.
+
+What was run instead: a standalone Gradle/Kotlin JVM project compiling the
+**Android-free subset of the real sources** — `domain/`, `delivery/` (less the
+two files importing Bluetooth), `net/` and `ble/BleProtocol.kt` — against the
+real test sources, with the real Kotlin compiler. It covers 67 of the 73 JVM
+tests; the 6 in `BackendConfigTest` need an Android `Context` and were excluded.
+Coroutines resolved to 1.10.2 rather than the pinned 1.11.0, which is a
+harness-only difference.
+
+This is a **JVM** result. It is not an emulator result and not a device result,
+and the shipped Gradle build has **not** been run since these changes. Confirm
+with `./gradlew :app:testDebugUnitTest` before the demo.
+
+### The defect
+
+**An emergency interrupted part way through a delivery attempt was never
+delivered, and it stranded every other queued emergency with it.**
+
+`DeliveryManager` writes an event to disk in `DELIVERY_ATTEMPT` *before* calling
+the transport, so that an attempt is auditable even if the phone dies during it.
+The consequence is that `DELIVERY_ATTEMPT` is the on-disk state for the entire
+duration of a transport call — a five-second connect timeout, a twenty-second
+BLE advertising window. Being killed inside that window is the likely case, not
+the unlucky one.
+
+On the next launch such an event is still pending, so a delivery pass picks it
+up and tries to move it to `DELIVERY_ATTEMPT` again. That is not a legal
+transition, so `transitionTo` threw `IllegalTransitionException`. The exception
+escaped `deliver`, escaped `runDeliveryPass`, and aborted the entire pass. Since
+`pending()` is ordered oldest-first, one stranded emergency stopped **every**
+newer emergency from being attempted — every three seconds, indefinitely.
+
+A second path reached the same state: an event killed between the durable write
+in `submit` and the move to `QUEUED_OFFLINE` stayed at `CONFIRMED_EMERGENCY`,
+which also cannot move directly to `DELIVERY_ATTEMPT`.
+
+Nothing was ever *lost* — the invariant held, the events were on disk with their
+full history. But they were never delivered, which is the other half of the
+product's promise, and it broke under exactly the interruption the product
+exists to survive.
+
+Reproduced first as three failing tests, all raising
+`IllegalTransitionException`, before any fix was written.
+
+### The fix
+
+1. `recoverIfInterrupted` returns an event found in a non-resting state to
+   `QUEUED_OFFLINE` before any attempt begins. It runs inside `deliver`, so it
+   covers every entry point rather than only application startup.
+2. The interruption is **recorded, not repaired quietly**: a new
+   `AttemptOutcome.INTERRUPTED` row names the transport and the attempt number.
+   It is deliberately not `FAILED` — a failure is something that was observed,
+   whereas this attempt's outcome is genuinely unknown, and it is also the
+   honest explanation for an attempt count with no matching outcome.
+   Recovery does not increment `attemptCount`; nothing new was tried.
+3. Each event in a pass is now isolated with `runCatching`, so no single record
+   can abort the pass for the others.
+
+`INTERRUPTED` needed **no schema change and no migration**: `Entities.kt` stores
+enums by name in a `TEXT` column and falls back conservatively on an
+unrecognised value.
+
+### Results
+
+| Suite | Result | Environment |
+|---|---|---|
+| Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP, live uvicorn in this container |
+| Android core subset (67 of 73 JVM tests) | **67 passed, 0 failed** | JVM harness described above |
+| `:app:testDebugUnitTest` | **NOT RUN** | No Android SDK available |
+| `assembleDebug` / instrumented / device | **NOT RUN** | No Android SDK available |
+
+Five tests added in `DeliveryRecoveryTest`; the other 62 continued to pass
+unchanged, so the fix is not a behaviour change to any existing path.
+
+### What this does NOT prove
+
+Nothing about BLE, nothing about a physical device, nothing about the Compose
+UI, and nothing about the assembled APK. The interruption tested here is a
+simulated on-disk state, not an observed process kill on hardware — killing the
+app on a real phone and watching it recover is a **device** test and remains
+outstanding.
+
+---
+
 ## Not yet run
 
 [`docs/physical-ble-procedure.md`](physical-ble-procedure.md) — the T1–T11

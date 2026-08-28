@@ -28,6 +28,7 @@ mechanism that extends delivery when another phone is nearby.
 | Kotlin ↔ Python packet signing | Working | `sig_valid=true` on a live server |
 | Local persistence (Room) | Working | 8/8 durability + migration tests on an Android runtime *(emulated)* |
 | Delivery state machine | Working | Scenarios A–E unit tested |
+| Recovery from interrupted delivery | Working | An emergency killed mid-attempt is recovered and delivered; 5 tests |
 | Simulated relay transport | Working | Scenario A observed end to end *(emulated)* |
 | Direct network transport | Working | Scenario B observed end to end *(emulated)* |
 | Responder interface | Working | Reads the backend, not local state |
@@ -186,7 +187,7 @@ Bind `0.0.0.0` so phones can reach it over the LAN. Find the host IP with
 
 ```bash
 cd android
-./gradlew :app:testDebugUnitTest       # 68 JVM tests
+./gradlew :app:testDebugUnitTest       # 73 JVM tests
 ./gradlew :app:assembleDebug
 
 # point the app at your machine instead of the emulator loopback:

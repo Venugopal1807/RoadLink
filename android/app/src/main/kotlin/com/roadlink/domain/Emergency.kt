@@ -288,6 +288,17 @@ enum class AttemptOutcome {
 
     FAILED,
     UNAVAILABLE,
+
+    /**
+     * The attempt started but its outcome was never observed, because the
+     * process died while the transport was working.
+     *
+     * Deliberately not FAILED. A failure is something we watched happen; this
+     * is an attempt whose result is genuinely unknown, and recording it as a
+     * failure would claim knowledge we do not have. It is also the honest
+     * explanation for an attempt count that has no matching outcome.
+     */
+    INTERRUPTED,
 }
 
 /**
