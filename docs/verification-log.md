@@ -516,6 +516,53 @@ outstanding.
 
 ---
 
+## 2026-08-28 — Rider and responder screens reordered
+
+### What changed
+
+The Rider screen used to open with the backend-address editor and four blocks
+of development controls, and the emergencies themselves — the product — were
+last. It now opens with a status banner answering "is my emergency safe?", then
+the trigger, then the emergencies with a per-emergency custody trail. Every
+development control is behind one collapsed toggle, still present and still
+labelled. The backend-address editor surfaces itself automatically when the
+backend is unreachable, because that is the one failure a first-time installer
+can actually fix.
+
+The responder screen now states on the screen that it reads from the server
+rather than from the phone, and spells out the two fidelity axes in words
+instead of leaving a pair of chips to be interpreted.
+
+### How it was checked, and how far that goes
+
+Compose **cannot be compiled in this environment** — Google's Maven repository
+is unreachable — so the following is what was actually done:
+
+| Check | Result |
+|---|---|
+| Kotlin parser over `RiderScreen.kt`, `ResponderScreen.kt`, `Components.kt` | **0 syntax errors** |
+| Brace and parenthesis balance on the same three files | **balanced** |
+| Every domain call the screens make, mirrored in plain Kotlin and compiled against the real types | **compiles** |
+| `RiderStatus` and `CustodyTimeline` behaviour | **15 tests, 0 failures** |
+
+The mirrored call-site check earned its place immediately: it failed on a
+non-exhaustive `when`, because `CustodyStep.Kind` declared an `ATTEMPT`
+constant that `CustodyTimeline.of` never emits. That would have been a
+compile error on the first real build. The unused constant was removed rather
+than given a branch.
+
+### What this does NOT prove
+
+**The Compose code has never been compiled and the screens have never been
+rendered.** Parsing is not type checking: a wrong parameter name or a bad
+argument type in a Compose call would not be caught by anything above. No APK
+was built, no screenshot was taken, and no layout was seen.
+
+Run `./gradlew :app:assembleDebug` before relying on any of this. That build is
+the first real check of these files.
+
+---
+
 ## Not yet run
 
 [`docs/physical-ble-procedure.md`](physical-ble-procedure.md) — the T1–T11

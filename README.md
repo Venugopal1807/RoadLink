@@ -32,6 +32,8 @@ mechanism that extends delivery when another phone is nearby.
 | Simulated relay transport | Working | Scenario A observed end to end *(emulated)* |
 | Direct network transport | Working | Scenario B observed end to end *(emulated)* |
 | Responder interface | Working | Reads the backend, not local state |
+| Rider status vocabulary (6 states) | Working | Incl. FAILED BUT RETAINED; 8 tests |
+| Per-emergency custody trail | Working | Built only from stored rows; 7 tests |
 | BLE protocol codecs | Working | Beacon/ACK/packet round trip + tamper rejection, 15 JVM tests |
 | **Phone-to-phone BLE transport** | **NOT VALIDATED** | **No RoadLink BLE code has ever run on a radio** |
 | Crash detection (sensor) | Not started | Trigger interface exists; `TestCrashDetector` only |

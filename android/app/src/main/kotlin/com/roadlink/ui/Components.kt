@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.roadlink.domain.EmergencyEvent
+import com.roadlink.domain.RiderStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,6 +34,24 @@ fun statusColor(label: String): Color = when (label) {
     "RETRYING" -> RlOrange
     "CONFIRMED" -> RlRed
     else -> RlBlue // any active *_RELAYING / *_UPLOAD state
+}
+
+/**
+ * Colour for a rider-facing status.
+ *
+ * FAILED BUT RETAINED is deliberately orange rather than red. The attempt
+ * failed; the emergency did not, and it is still being retried. Red would say
+ * "something is lost", which is the one thing that has not happened.
+ */
+fun riderStatusColor(status: RiderStatus): Color = when (status) {
+    RiderStatus.READY -> RlSlate
+    RiderStatus.PERSISTED -> RlRed
+    RiderStatus.QUEUED -> RlAmber
+    RiderStatus.RETAINED_AFTER_FAILURE -> RlOrange
+    RiderStatus.DELIVERING -> RlBlue
+    // Progress, not arrival. Never green.
+    RiderStatus.RELAYED -> RlAmber
+    RiderStatus.DELIVERED -> RlGreen
 }
 
 @Composable

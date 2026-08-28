@@ -29,12 +29,14 @@ data class CustodyStep(
      */
     val transport: TransportKind? = null,
 ) {
+    /**
+     * Every kind here is produced by [CustodyTimeline.of]. Nothing is declared
+     * "for later": an unused constant is a branch every renderer has to handle
+     * and no reader can ever see.
+     */
     enum class Kind {
         /** Confirmed and written to disk. Always the first step. */
         PERSISTED,
-
-        /** A transport was tried. */
-        ATTEMPT,
 
         /** A transport was tried and failed. The emergency was retained. */
         FAILED,
