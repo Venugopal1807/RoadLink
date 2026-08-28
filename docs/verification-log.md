@@ -643,6 +643,85 @@ real check, and it has not happened.
 
 ---
 
+## 2026-08-28 — Production hardening pass
+
+A component-by-component review of the release candidate. Two genuine defects
+were found, both in `BleCentral`, both **stalls** rather than crashes, and both
+in code that has never run on a radio — so neither could have been caught by any
+test recorded in this log.
+
+### Defect 1 — service discovery depended on the MTU callback
+
+`onConnectionStateChange` requested a 517-byte MTU on connect, and
+`discoverServices()` was called **only** from `onMtuChanged`. `requestMtu`
+returns a boolean, and a refused request produces no callback at all. In that
+case the relay would connect, request an MTU, and then sit with an open
+connection forever: no discovery, no read, no disconnect, no retry, `pendingRef`
+still set, and scanning never resumed.
+
+The code comment asserted that "nothing downstream depends on this succeeding",
+which was true of the MTU value and false of the control flow. A refused request
+now continues straight to `discoverServices()`.
+
+### Defect 2 — a missing ACK characteristic left the connection open
+
+If the rider did not expose the ACK characteristic, `writeAck` logged, cleared
+`pendingRef` and returned **without disconnecting**. The emergency was already
+stored so nothing was lost, but the GATT client slot stayed held and scanning
+never resumed, so the relay silently stopped collecting. It now disconnects,
+which frees the slot and lets `onConnectionStateChange` resume scanning.
+
+Both would have presented on hardware as "it connects and then nothing
+happens" during T5 or T9, which is among the hardest BLE symptoms to diagnose.
+
+### Residual risk NOT fixed
+
+`writeAck` checks whether the write **threw**, but not whether it was refused
+(`writeCharacteristic` returns a boolean pre-API 33 and a status code from 33).
+A refused write stalls the same way as defect 1. It is left alone deliberately:
+the fix needs an API-33-only class that cannot be compile-checked in this
+environment, and the failure is contained — the rider simply never receives an
+ACK, keeps the emergency queued and keeps trying, which is the safe direction.
+Worth fixing on a machine that can build.
+
+### Reviewed and found correct
+
+Android: Room migration v1→v2 with no destructive fallback and exported
+schemas; `INTERRUPTED` needs no migration because enums are stored by name;
+`EmergencyDao` has no `@Delete` and no `DELETE` statement anywhere; ABORT rather
+than REPLACE on insert conflict; `BlePeripheral` cleans up advertiser and GATT
+server in a `finally`; `BleCentral` calls `close()` on disconnect and clears
+its handler; `AndroidConnectivity` registers no callback so there is nothing to
+leak; `SosApiClient` sets both timeouts and disconnects in `finally`; no
+Activity context is retained anywhere.
+
+Backend: every model is `extra="forbid"` with range and length constraints, so
+malformed input is a 422 rather than a coercion; ingest runs `BEGIN IMMEDIATE`
+with `INSERT OR IGNORE`, appends an audit row on both branches, rolls back on
+exception and closes the connection in `finally`; WAL plus a 10s busy timeout;
+first write wins and `first_delivery_path` is never overwritten.
+
+Security: replay is now documented in `security.md` — there is no nonce and no
+freshness window, and what limits replay is idempotency rather than
+cryptography.
+
+### Suites re-run after the changes
+
+| Suite | Result |
+|---|---|
+| Backend ingestion + idempotency | **61 passed, 0 failed** |
+| Android JVM suite | **88 passed, 0 failed** |
+| `BleCentral.kt` parse check | 0 syntax errors |
+
+### What this does NOT prove
+
+`BleCentral` is not covered by any automated test — it imports Bluetooth
+classes and cannot run on a JVM. Both fixes are **reasoned, parse-checked and
+uncompiled**. They are corrections to a code path that has never executed, and
+they remain UNVERIFIED until the T1–T11 ladder runs on real hardware.
+
+---
+
 ## Not yet run
 
 [`docs/physical-ble-procedure.md`](physical-ble-procedure.md) — the T1–T11

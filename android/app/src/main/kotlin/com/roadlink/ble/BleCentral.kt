@@ -181,9 +181,16 @@ class BleCentral(
                 BluetoothProfile.STATE_CONNECTED -> {
                     retryAttempt = 0
                     log("RELAY connected to ${g.device.address}")
-                    // Best effort. Long reads fall back to ATT_READ_BLOB, so
-                    // nothing downstream depends on this succeeding.
-                    g.requestMtu(517)
+                    // A larger MTU is an optimisation - long reads fall back to
+                    // ATT_READ_BLOB - but service discovery is only driven from
+                    // onMtuChanged. If the request cannot even be queued, that
+                    // callback never fires, and the connection would sit open
+                    // forever with the emergency uncollected. So a refused
+                    // request continues straight to discovery instead.
+                    if (!g.requestMtu(517)) {
+                        log("RELAY MTU request refused; continuing at the default MTU")
+                        g.discoverServices()
+                    }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     runCatching { g.close() }
@@ -315,8 +322,13 @@ class BleCentral(
         val ackChar = g.getService(RoadLinkUuids.SERVICE)
             ?.getCharacteristic(RoadLinkUuids.CHAR_ACK)
         if (ackChar == null) {
-            log("RELAY rider does not expose an ACK characteristic")
+            // The emergency is already stored here, so nothing is lost - but the
+            // rider will not learn that. Disconnect rather than holding an open
+            // connection that can never complete: that both frees the GATT
+            // client slot and lets onConnectionStateChange resume scanning.
+            log("RELAY rider does not expose an ACK characteristic; disconnecting")
             pendingRef = null
+            runCatching { g.disconnect() }
             return
         }
         val payload = BleAck(eventId, relayId, System.currentTimeMillis()).encode()
