@@ -14,7 +14,7 @@ strength of a plan.
 | 2 | **Source code** | **READY** | Clean tree, pushed to `github.com/Venugopal1807/RoadLink` |
 | 3 | **Documentation** | **READY** | Documents under `docs/`, indexed from the README |
 | 4 | **Deployed / working demo** | **PENDING** | Blueprint and Dockerfile added; **no service deployed**. LAN demo path is verified. See [`deployment.md`](deployment.md) |
-| 5 | **PPT** | **PENDING** | Slide source written at [`submission-presentation.md`](submission-presentation.md); the deck file itself must be produced |
+| 5 | **PPT** | **PENDING** | Slide source written at [`codestorm-presentation.md`](codestorm-presentation.md); the deck file itself must be produced |
 | 6 | **Demo video** | **PENDING** | Script at [`demo.md`](demo.md); not recorded |
 
 ## Detailed items
@@ -80,7 +80,7 @@ Re-run 2026-08-23.
 
 1. **Record the demo video.** Follow [`demo.md`](demo.md). Scene 4 - killing the
    app while an emergency is undelivered - is the one that carries the claim.
-2. **Produce the deck** from [`submission-presentation.md`](submission-presentation.md).
+2. **Produce the deck** from [`codestorm-presentation.md`](codestorm-presentation.md).
 3. **Install the APK on a phone and launch it.** The single largest untested
    assumption in the submission.
    **Also resolve this:** commit `c1f41e1` says "Found on a physical phone",

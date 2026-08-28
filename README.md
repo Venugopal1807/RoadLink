@@ -291,7 +291,8 @@ isolating which side of a BLE failure is at fault.
 | [`deployment.md`](docs/deployment.md) | Hosting the backend, and the LAN fallback |
 | [`submission-checklist.md`](docs/submission-checklist.md) | Submission state, item by item |
 | [`demo.md`](docs/demo.md) | The demo script, scene by scene |
-| [`submission-presentation.md`](docs/submission-presentation.md) | Slide-by-slide source for the deck |
+| [`codestorm-presentation.md`](docs/codestorm-presentation.md) | Slide-by-slide source for the CodeStorm deck |
+| [`three-minute-pitch.md`](docs/three-minute-pitch.md) | Three-minute spoken pitch, and the questions to expect |
 | [`ADR-002`](docs/decisions/ADR-002-transport-abstraction.md) | Why delivery sits behind a transport abstraction |
 
 ---
