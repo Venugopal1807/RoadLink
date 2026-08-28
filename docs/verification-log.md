@@ -436,8 +436,9 @@ any instrumented run were therefore **impossible here** and were not attempted.
 What was run instead: a standalone Gradle/Kotlin JVM project compiling the
 **Android-free subset of the real sources** — `domain/`, `delivery/` (less the
 two files importing Bluetooth), `net/` and `ble/BleProtocol.kt` — against the
-real test sources, with the real Kotlin compiler. It covers 67 of the 73 JVM
-tests; the 6 in `BackendConfigTest` need an Android `Context` and were excluded.
+real test sources, with the real Kotlin compiler. It initially covered 67 of the 73 JVM tests; the 6 in `BackendConfigTest` were
+excluded because they need an Android `Context`, and were brought in later the
+same day with a stub (see the release-candidate entry below).
 Coroutines resolved to 1.10.2 rather than the pinned 1.11.0, which is a
 harness-only difference.
 
@@ -499,7 +500,7 @@ unrecognised value.
 | Suite | Result | Environment |
 |---|---|---|
 | Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP, live uvicorn in this container |
-| Android core subset (67 of 73 JVM tests) | **67 passed, 0 failed** | JVM harness described above |
+| Android core subset (JVM tests) | **passed, 0 failed** | JVM harness described above |
 | `:app:testDebugUnitTest` | **NOT RUN** | No Android SDK available |
 | `assembleDebug` / instrumented / device | **NOT RUN** | No Android SDK available |
 
@@ -560,6 +561,85 @@ was built, no screenshot was taken, and no layout was seen.
 
 Run `./gradlew :app:assembleDebug` before relying on any of this. That build is
 the first real check of these files.
+
+---
+
+## 2026-08-28 — Release-candidate build verification
+
+The one question that mattered: **does the Android project still build after the
+2026-08-28 changes?**
+
+### Answer: UNKNOWN. The build could not be attempted here.
+
+All three Gradle tasks were run and all three failed identically, at the same
+point:
+
+```
+* Where:
+Build file 'android/build.gradle.kts' line: 1
+
+* What went wrong:
+Plugin [id: 'com.android.application', version: '8.13.0', apply: false]
+was not found in any of the following sources:
+  - Plugin Repositories (could not resolve plugin artifact
+    'com.android.application:com.android.application.gradle.plugin:8.13.0')
+```
+
+| Task | Result |
+|---|---|
+| `:app:testDebugUnitTest` | FAILED — plugin resolution |
+| `:app:assembleDebug` | FAILED — plugin resolution |
+| `:app:assembleRelease` | FAILED — plugin resolution |
+
+### This is an ENVIRONMENT failure, not a source failure
+
+The distinction is not a judgement call here, it is visible in the output. The
+build fails at `build.gradle.kts` **line 1**, while resolving the Android Gradle
+Plugin itself. No source file was read, no Kotlin was compiled, and no error
+refers to any file in this repository.
+
+The cause is network policy in the build environment:
+
+| Host | Result |
+|---|---|
+| `dl.google.com/dl/android/maven2/...` | **blocked** (HTTP 403 at the proxy) |
+| `dl.google.com/android/repository/...` (SDK tools) | **blocked** |
+| `repo.maven.apache.org` | reachable (200) |
+
+So AGP, AndroidX, Room and Compose cannot be resolved, and no Android SDK can be
+installed. **No APK was produced, and none could be.**
+
+Nothing in the build configuration was modified to work around this. Changing
+repositories or plugin versions to satisfy a broken environment would make the
+build weaker on the machine that matters.
+
+### What was verified instead
+
+| Check | Result | Class |
+|---|---|---|
+| Backend ingestion + idempotency | **61 passed, 0 failed** | **VERIFIED** — real HTTP, live uvicorn |
+| Android JVM suite, all of it | **88 passed, 0 failed** | **VERIFIED** — JVM harness, not the Gradle build |
+| Kotlin ↔ Python wire compatibility | **PASSED**, `sig_valid=true` | **VERIFIED** — real HTTP |
+| Compose sources parse | 0 syntax errors | **VERIFIED** — parser only |
+| `:app:testDebugUnitTest` / `assembleDebug` / `assembleRelease` | — | **UNKNOWN** |
+| APK exists, installs, launches | — | **UNKNOWN** |
+
+The JVM harness reached all 88 tests this session. `BackendConfigTest`'s 6 had
+been excluded because `BackendConfig` needs an Android `Context`; a minimal
+`Context`/`SharedPreferences` stub was written **in the scratchpad only** so the
+real file compiles and its tests run. That stub is not in this repository and is
+not part of the build.
+
+### What this does NOT prove
+
+**It does not prove the app compiles.** The JVM harness covers `domain/`,
+`delivery/`, `net/`, `ble/BleProtocol.kt` and `platform/BackendConfig.kt`. It
+does **not** cover any Compose file, any Room-generated code, resource merging,
+manifest merging, dexing or packaging. A type error in `RiderScreen.kt` would
+not be caught by anything recorded above.
+
+`./gradlew :app:assembleDebug` on a machine with the Android SDK is the first
+real check, and it has not happened.
 
 ---
 

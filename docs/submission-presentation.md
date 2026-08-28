@@ -156,11 +156,20 @@ Enforced by structure, not by discipline:
 - The backend is **idempotent on event_id**: rider and relays may all submit the
   same emergency. One record, every attempt audited.
 
+- **An interrupted attempt recovers.** An emergency is written to disk in
+  `DELIVERY_ATTEMPT` *before* the transport is called, so that is its on-disk
+  state for the whole duration of a network timeout or an advertising window.
+  Killed inside that window, it is recovered to the retry queue on the next
+  launch, and the interruption is recorded as `INTERRUPTED` — not as a failure,
+  because its outcome was never observed.
+
 A test asserts the **order** of persistence and transmission, not merely that
 both happened.
 
 > That ordering test is the difference between proving the invariant and
-> assuming it.
+> assuming it. The recovery point is worth dwelling on: it was a real bug, found
+> by asking what happens if the process dies mid-delivery, and it is now the
+> demo.
 
 ---
 
@@ -169,18 +178,20 @@ both happened.
 | Suite | Result | Evidence |
 |---|---|---|
 | Backend ingestion + idempotency | 61 passed, 0 failed | **VERIFIED** |
-| Android JVM tests | 88 tests, 0 failures | **VERIFIED** |
-| Kotlin ↔ Python wire compatibility | PASSED | **VERIFIED** |
+| Android JVM tests | 88 passed, 0 failed | **VERIFIED** |
+| Kotlin ↔ Python wire compatibility | PASSED, `sig_valid=true` | **VERIFIED** |
 | Durability + schema migration | 8 passed, 0 failed | **EMULATED** |
 | Offline → reconnect → delivery | Observed end to end | **EMULATED** |
-| Phone-to-phone BLE over a radio | — | **NOT VERIFIED** |
+| Phone-to-phone BLE over a radio | — | **UNKNOWN** |
+| Sensor crash detection | not implemented | **KNOWN LIMITATION** |
 
 **The strongest evidence was unplanned.** An emergency hit a real Android
 platform fault, failed delivery **eight consecutive times**, survived an
 application **rebuild and reinstall**, and was delivered on the ninth attempt
 with a valid signature. Nothing was lost. *(EMULATED, and not scripted.)*
 
-> Three evidence labels, never merged. If BLE comes up, point at the honest row.
+> Four evidence labels, never merged: VERIFIED, EMULATED, UNKNOWN, KNOWN
+> LIMITATION. If BLE comes up, point at the honest row and move on.
 
 ---
 
@@ -193,8 +204,8 @@ any path appears, and a passing phone can shorten that wait.
 
 **Next, in order**
 
-1. Physical BLE validation on two handsets — the procedure is written, every
-   result cell is empty by design.
+1. Physical BLE validation on two handsets — the T1–T11 procedure is written and
+   every result cell is empty by design, because nothing has been measured.
 2. Sensor-based crash detection, replacing the test trigger.
 3. Per-device keys in the Android Keystore, replacing the shared prototype key.
 4. Background delivery service; PostgreSQL in place of SQLite.

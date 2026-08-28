@@ -64,7 +64,7 @@ Re-run on 2026-08-23. Commands are in [`testing.md`](testing.md).
 | Suite | Result | Evidence class |
 |---|---|---|
 | Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP against live uvicorn |
-| Android JVM unit tests | **82 of 88 passed, 0 failed** (2026-08-28) | JVM, Android-free subset — see the environment note in [`verification-log.md`](verification-log.md) |
+| Android JVM unit tests | **88 of 88 passed, 0 failed** (2026-08-28) | JVM harness, not the Gradle build — see the environment note in [`verification-log.md`](verification-log.md) |
 | Kotlin ↔ Python wire compatibility | **PASSED**, `sig_valid=true` | Real HTTP |
 | `:app:assembleDebug` | BUILD SUCCESSFUL | |
 | `:app:assembleDebugAndroidTest` | BUILD SUCCESSFUL | |
@@ -75,10 +75,11 @@ JVM test breakdown: BLE protocol 15, delivery invariants 8, delivery scenarios
 backend-address handling 6, rider status 8, custody timeline 7.
 
 The 2026-08-23 figures came from the full `:app:testDebugUnitTest`. The
-2026-08-28 re-run used a JVM harness over the Android-free sources because no
-Android SDK was available, so it covers 82 of the 88 and excludes
-`BackendConfigTest`. **The full Gradle suite has not been run since the
-2026-08-28 change.**
+2026-08-28 re-run used a JVM harness over the Android-free sources, because no
+Android SDK and no access to Google's Maven repository were available. All 88
+tests run there. **The Gradle build itself has NOT been run since the
+2026-08-28 changes — it cannot resolve the Android Gradle Plugin in that
+environment. The Android build status is UNKNOWN.**
 
 **Instrumented tests were not re-run in this session** (`adb devices` empty).
 Their 8/8 figure is the earlier EMULATED result, carried forward and labelled as

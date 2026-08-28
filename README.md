@@ -38,6 +38,12 @@ mechanism that extends delivery when another phone is nearby.
 | **Phone-to-phone BLE transport** | **NOT VALIDATED** | **No RoadLink BLE code has ever run on a radio** |
 | Crash detection (sensor) | Not started | Trigger interface exists; `TestCrashDetector` only |
 
+> **Android build status: UNKNOWN.** The last environment to touch this code
+> could not resolve the Android Gradle Plugin, so `assembleDebug` has not been
+> run since the 2026-08-28 changes and no APK has been produced from them. The
+> JVM suite (88 tests), the backend suite (61) and the cross-language wire check
+> all pass. Run `./gradlew :app:assembleDebug` before relying on a build.
+
 Full results, including what each run does *not* prove:
 [`docs/verification-log.md`](docs/verification-log.md).
 

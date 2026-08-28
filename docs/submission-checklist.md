@@ -10,7 +10,7 @@ strength of a plan.
 
 | # | Item | State | Evidence / what is missing |
 |---|---|---|---|
-| 1 | **Functional production-level project** | **READY** (as a prototype) | Builds, runs, all suites pass. Explicitly a prototype, not production infrastructure — see [`limitations.md`](limitations.md) |
+| 1 | **Functional production-level project** | **PENDING BUILD** | All test suites pass; the Android build has not been run against the current source. Explicitly a prototype — see [`limitations.md`](limitations.md) |
 | 2 | **Source code** | **READY** | Clean tree, pushed to `github.com/Venugopal1807/RoadLink` |
 | 3 | **Documentation** | **READY** | Documents under `docs/`, indexed from the README |
 | 4 | **Deployed / working demo** | **PENDING** | Blueprint and Dockerfile added; **no service deployed**. LAN demo path is verified. See [`deployment.md`](deployment.md) |
@@ -25,7 +25,7 @@ strength of a plan.
 | README | **READY** | Overview, problem, solution, workflow, architecture, stack, setup, demo, testing, BLE status, security, limitations, roadmap |
 | Documentation | **READY** | Architecture, setup, deployment, testing, limitations, security, demo, verification log, ADR |
 | Backend | **READY (local/LAN)** · **PENDING (public)** | Runs and passes 61 assertions. Not deployed anywhere public |
-| APK | **READY to build** · **NOT RUN** | Builds; embedded URL verified inside `classes4.dex`. **Never installed or launched on a phone** |
+| APK | **UNKNOWN** | The 2026-08-23 APK built; the 2026-08-28 changes have **never been compiled** - no Android SDK, Google Maven blocked. **No APK exists for the current source.** Run `:app:assembleDebug` |
 | Working demo | **READY (procedure)** · **PENDING (rehearsal)** | Script at [`demo.md`](demo.md). Verified EMULATED end to end. Not rehearsed on the demo hardware |
 | PPT | **PENDING** | Source written; deck not produced |
 | Demo video | **PENDING** | Not recorded |
@@ -45,11 +45,11 @@ Re-run 2026-08-23.
 | Suite | Result | Evidence class |
 |---|---|---|
 | Backend ingestion + idempotency | 61 passed, 0 failed | **VERIFIED** — real HTTP, live uvicorn |
-| Android JVM | 82 of 88 passed, 0 failed (2026-08-28) | **VERIFIED** — JVM, Android-free subset |
+| Android JVM | 88 of 88 passed, 0 failed (2026-08-28) | **VERIFIED** — JVM harness, not the Gradle build |
 | Kotlin ↔ Python wire compatibility | PASSED, `sig_valid=true` | **VERIFIED** — real HTTP |
-| `:app:assembleDebug` | BUILD SUCCESSFUL | **VERIFIED** |
-| `:app:assembleRelease` | BUILD SUCCESSFUL | **VERIFIED** |
-| `:app:assembleDebugAndroidTest` | BUILD SUCCESSFUL | **VERIFIED** |
+| `:app:assembleDebug` | **NOT RUN** (2026-08-28) | **UNKNOWN** — AGP unresolvable in that environment |
+| `:app:assembleRelease` | **NOT RUN** (2026-08-28) | **UNKNOWN** |
+| `:app:assembleDebugAndroidTest` | **NOT RUN** (2026-08-28) | **UNKNOWN** |
 | `:spike-ble:assembleDebug` | BUILD SUCCESSFUL | **VERIFIED** |
 | Backend start command used by the deploy blueprint | `/healthz` 200, `/api/v1/sos/active` 200 | **VERIFIED** — locally, `PORT=8123` |
 | APK carries the configured backend URL | Found in `classes4.dex` | **VERIFIED** |
