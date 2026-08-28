@@ -167,7 +167,7 @@ returns. Covered by two new tests in `DeliveryScenarioTest`.
 
 ## 9. Submission gaps
 
-Tracked in [`round2-submission-checklist.md`](round2-submission-checklist.md).
+Tracked in [`submission-checklist.md`](submission-checklist.md).
 The ones that
 need a human, not a code change:
 

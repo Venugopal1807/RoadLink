@@ -1,6 +1,6 @@
 # RoadLink — presentation source
 
-Ten slides for Prasunethon 2.0 Round 2. Blockquotes are speaker notes and are
+Ten slides for CodeStorm 2026: FutureForge. Blockquotes are speaker notes and are
 not meant to appear on the slide.
 
 Every figure here is traceable to `verification-log.md` or a test run. There are
@@ -169,7 +169,7 @@ both happened.
 | Suite | Result | Evidence |
 |---|---|---|
 | Backend ingestion + idempotency | 61 passed, 0 failed | **VERIFIED** |
-| Android JVM tests | 68 passed, 0 failed | **VERIFIED** |
+| Android JVM tests | 88 tests, 0 failures | **VERIFIED** |
 | Kotlin ↔ Python wire compatibility | PASSED | **VERIFIED** |
 | Durability + schema migration | 8 passed, 0 failed | **EMULATED** |
 | Offline → reconnect → delivery | Observed end to end | **EMULATED** |

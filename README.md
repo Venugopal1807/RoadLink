@@ -20,7 +20,7 @@ mechanism that extends delivery when another phone is nearby.
 
 ---
 
-## Status — 2026-08-23
+## Status — 2026-08-28
 
 | Area | State | Evidence |
 |---|---|---|
@@ -214,9 +214,9 @@ mismatch does not error, it just stores every emergency with `sig_valid=false`.
 
 ## Demo
 
-The sequence below is the demo. Step-by-step recording instructions, with the
-exact log output to expect, ship in the submission package as
-`05_Demo/Demo_Instructions.md`.
+The full scene-by-scene script is [`docs/demo.md`](docs/demo.md). It runs on
+**one phone**, with no Bluetooth and no second device, so the parts of RoadLink
+that are unproven cannot break the parts that are.
 
 All paths use the same state machine, the same persistence and the same audit
 trail. Only the transport differs.
@@ -231,15 +231,21 @@ The demo never depends on staging a real crash. **CREATE TEST SOS** drives the
 identical pipeline a sensor trigger will use (signing, persistence, state
 machine, transport, backend, audit) and only the trigger is simulated.
 
-**The baseline sequence, which carries the product claim:**
+**The sequence that carries the product claim:**
 
-1. Rider tab → turn *relay in range* **off** and *force rider offline* **on**
-2. **CREATE TEST SOS** → the event is persisted, then shows `QUEUED`; nothing
-   reaches the backend
+1. Rider tab → demo controls → *force rider offline* **on**
+2. **CREATE TEST SOS** → persisted, then `OFFLINE / QUEUED`; nothing reaches
+   the backend
 3. Responder tab → no emergency (correct: it genuinely has not arrived)
-4. Turn *force rider offline* **off**
-5. Within seconds the event moves to `DELIVERED` via `DIRECT NETWORK`
-6. Responder tab → the emergency appears, with its delivery path shown
+4. **Force stop the app from Android settings.** The process is gone while the
+   emergency is still undelivered.
+5. Reopen RoadLink, turn *force rider offline* **off**
+6. Within seconds it reads `DELIVERED`, and the custody trail shows every
+   attempt including the interrupted one
+7. Responder tab → the emergency appears, read from the server
+
+Step 4 is the point. An emergency that survives its own application being
+killed is the difference between a claim and a demonstration.
 
 Because BLE is a transport rather than the product, the demonstration above is
 unaffected by whether the radio path has been validated.
@@ -277,7 +283,8 @@ isolating which side of a BLE failure is at fault.
 | [`physical-ble-procedure.md`](docs/physical-ble-procedure.md) | The T1–T11 hardware ladder |
 | [`physical-test-results.md`](docs/physical-test-results.md) | Its results sheet — currently all NOT YET TESTED |
 | [`deployment.md`](docs/deployment.md) | Hosting the backend, and the LAN fallback |
-| [`round2-submission-checklist.md`](docs/round2-submission-checklist.md) | Round 2 submission state, item by item |
+| [`submission-checklist.md`](docs/submission-checklist.md) | Submission state, item by item |
+| [`demo.md`](docs/demo.md) | The demo script, scene by scene |
 | [`submission-presentation.md`](docs/submission-presentation.md) | Slide-by-slide source for the deck |
 | [`ADR-002`](docs/decisions/ADR-002-transport-abstraction.md) | Why delivery sits behind a transport abstraction |
 
