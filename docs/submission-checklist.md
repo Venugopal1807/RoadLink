@@ -29,7 +29,7 @@ strength of a plan.
 | Working demo | **READY (procedure)** · **PENDING (rehearsal)** | Script at [`demo.md`](demo.md). Verified EMULATED end to end. Not rehearsed on the demo hardware |
 | PPT | **PENDING** | Source written; deck not produced |
 | Demo video | **PENDING** | Not recorded |
-| GitHub repository | **READY** | `github.com/Venugopal1807/RoadLink`, branch `main`, local HEAD == `origin/main` |
+| GitHub repository | **READY** | `github.com/Venugopal1807/RoadLink`, branch `codestorm-2026`, local HEAD == `origin/codestorm-2026` |
 | Testing evidence | **READY** | [`testing.md`](testing.md) and [`verification-log.md`](verification-log.md) |
 | Security review | **READY** | [`security.md`](security.md). Threat model, prototype limits stated, no secrets committed |
 | Limitations | **READY** | [`limitations.md`](limitations.md) |
@@ -50,9 +50,9 @@ Re-run 2026-08-23.
 | `:app:assembleDebug` | **NOT RUN** (2026-08-28) | **UNKNOWN** — AGP unresolvable in that environment |
 | `:app:assembleRelease` | **NOT RUN** (2026-08-28) | **UNKNOWN** |
 | `:app:assembleDebugAndroidTest` | **NOT RUN** (2026-08-28) | **UNKNOWN** |
-| `:spike-ble:assembleDebug` | BUILD SUCCESSFUL | **VERIFIED** |
+| `:spike-ble:assembleDebug` | **NOT RUN** (2026-08-28) | **UNKNOWN** |
 | Backend start command used by the deploy blueprint | `/healthz` 200, `/api/v1/sos/active` 200 | **VERIFIED** — locally, `PORT=8123` |
-| APK carries the configured backend URL | Found in `classes4.dex` | **VERIFIED** |
+| APK carries the configured backend URL | Confirmed on the 2026-08-23 source only | **NOT VERIFIED** for current HEAD — no APK exists |
 | Debug variant permits cleartext, release denies it | Merged resources inspected | **VERIFIED** |
 | Persistence durability + schema migration | 8 passed, 0 failed | **EMULATED** — not re-run, no device |
 | Offline queue → reconnect → delivery | Observed end to end | **EMULATED** |

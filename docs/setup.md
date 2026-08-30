@@ -68,7 +68,28 @@ cd android
 ./gradlew :app:assembleDebug
 ```
 
+On **Windows**, use the batch wrapper instead — `./gradlew` is not a command in
+PowerShell or `cmd`:
+
+```powershell
+cd android
+.\gradlew.bat :app:testDebugUnitTest
+.\gradlew.bat :app:assembleDebug
+```
+
+Everything else on this page is identical; only the wrapper invocation differs.
+
 The APK lands at `app/build/outputs/apk/debug/app-debug.apk`.
+
+### What the build needs
+
+| Requirement | Value | If it is missing |
+|---|---|---|
+| **SDK Platform 36** | `compileSdk = 36` | `Failed to find target with hash string 'android-36'`. Install it in Android Studio → SDK Manager → SDK Platforms → **Android API 36** |
+| **JDK 17 or newer** | Gradle 9 and AGP 8.13 both require it | Android Studio's embedded JDK already satisfies this. `java -version` to check a standalone one |
+| **Network on first run** | Gradle 9.0.0 (~130 MB) plus AGP and AndroidX | The wrapper downloads them once and caches them |
+
+The first build is slow because of those downloads. Later builds are not.
 
 The backend address can be set two ways, and neither requires a code change.
 

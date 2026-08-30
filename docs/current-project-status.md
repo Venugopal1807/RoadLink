@@ -66,9 +66,9 @@ Re-run on 2026-08-23. Commands are in [`testing.md`](testing.md).
 | Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP against live uvicorn |
 | Android JVM unit tests | **88 of 88 passed, 0 failed** (2026-08-28) | JVM harness, not the Gradle build — see the environment note in [`verification-log.md`](verification-log.md) |
 | Kotlin ↔ Python wire compatibility | **PASSED**, `sig_valid=true` | Real HTTP |
-| `:app:assembleDebug` | BUILD SUCCESSFUL | |
-| `:app:assembleDebugAndroidTest` | BUILD SUCCESSFUL | |
-| `:spike-ble:assembleDebug` | BUILD SUCCESSFUL | |
+| `:app:assembleDebug` | **NOT RUN** since 2026-08-28 | **UNKNOWN** |
+| `:app:assembleDebugAndroidTest` | **NOT RUN** since 2026-08-28 | **UNKNOWN** |
+| `:spike-ble:assembleDebug` | **NOT RUN** since 2026-08-28 | **UNKNOWN** |
 
 JVM test breakdown: BLE protocol 15, delivery invariants 8, delivery scenarios
 12, relay handoff 10, delivery recovery 5, canonical signing 10, envelope 7,
@@ -178,7 +178,7 @@ need a human, not a code change:
 4. The APK has never been installed or launched on a physical phone.
 5. Portal and Google Form submissions: not prepared.
 
-Source repository: `github.com/Venugopal1807/RoadLink`, branch `main`.
+Source repository: `github.com/Venugopal1807/RoadLink`, branch `codestorm-2026`.
 
 ## 10. Recommended final scope
 
