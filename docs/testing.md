@@ -9,7 +9,7 @@ is the how and the why.
 | Suite | Command | Count | Environment |
 |---|---|---|---|
 | Backend ingestion | `python backend/tests/test_idempotency.py` | 61 assertions | Real HTTP, live uvicorn |
-| Android JVM | `./gradlew :app:testDebugUnitTest` | 68 tests | JVM |
+| Android JVM | `./gradlew :app:testDebugUnitTest` | 88 tests | JVM |
 | Android instrumented | `./gradlew :app:connectedDebugAndroidTest` | 8 tests | Device or emulator |
 | Cross-language wire | `python tools/verify_wire_compat.py` | 6 checks | Real HTTP |
 | Build | `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :spike-ble:assembleDebug` | — | |
@@ -42,7 +42,7 @@ it.
 The server is started on a throwaway port against a temporary database, so the
 suite never touches a development database.
 
-## Android JVM — 68 tests
+## Android JVM — 88 tests
 
 ```bash
 cd android
@@ -56,6 +56,10 @@ cd android
 |---|---|---|
 | `DeliveryInvariantTest` | 8 | Persist-before-transmit, asserted on operation **order**; a failed write transmits nothing; the state machine has exactly one terminal state and no stranded states |
 | `DeliveryScenarioTest` | 12 | Scenarios A–E through the real `DeliveryManager` and real transports; backoff growth and capping; unavailable transports are recorded once, not per pass |
+| `DeliveryRecoveryTest` | 5 | An emergency interrupted **mid-attempt** by process death is still delivered afterwards; so is one interrupted before it was queued; the interruption is recorded as `INTERRUPTED` rather than as a failure; recovery invents no attempt; one unrecoverable emergency cannot strand the others in the same pass |
+| `BackendConfigTest` | 6 | Backend-address input handling: trailing slashes, a missing scheme, and refusing input that would break every later request |
+| `RiderStatusTest` | 8 | The six states the rider screen shows: a failed attempt reads as retained rather than failed; `RELAYED` is never reported as `DELIVERED`; `DELIVERED` is the only terminal status; the device is READY only when nothing is outstanding |
+| `CustodyTimelineTest` | 7 | The per-emergency timeline is derived only from stored rows: persistence is always first, a handoff is never described as a delivery, an interrupted attempt reads as unknown rather than failed, a simulated hop is flagged and a real one is not |
 | `RelayHandoffTest` | 10 | A relay ACK produces `RELAYED`, never `DELIVERED`; the event stays pending; a **disarmed BLE transport cannot produce a BLE success** and falls through to the network in the same pass |
 | `BleProtocolTest` | 15 | Beacon codec pinned byte-for-byte; packet round trip; tamper rejection; the beacon contains no identity, coordinates or raw event_id |
 | `CanonicalTest` | 10 | The Kotlin canonical string matches vectors generated from the Python backend |

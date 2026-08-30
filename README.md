@@ -20,7 +20,7 @@ mechanism that extends delivery when another phone is nearby.
 
 ---
 
-## Status — 2026-08-23
+## Status — 2026-08-28
 
 | Area | State | Evidence |
 |---|---|---|
@@ -28,12 +28,21 @@ mechanism that extends delivery when another phone is nearby.
 | Kotlin ↔ Python packet signing | Working | `sig_valid=true` on a live server |
 | Local persistence (Room) | Working | 8/8 durability + migration tests on an Android runtime *(emulated)* |
 | Delivery state machine | Working | Scenarios A–E unit tested |
+| Recovery from interrupted delivery | Working | An emergency killed mid-attempt is recovered and delivered; 5 tests |
 | Simulated relay transport | Working | Scenario A observed end to end *(emulated)* |
 | Direct network transport | Working | Scenario B observed end to end *(emulated)* |
 | Responder interface | Working | Reads the backend, not local state |
+| Rider status vocabulary (6 states) | Working | Incl. FAILED BUT RETAINED; 8 tests |
+| Per-emergency custody trail | Working | Built only from stored rows; 7 tests |
 | BLE protocol codecs | Working | Beacon/ACK/packet round trip + tamper rejection, 15 JVM tests |
 | **Phone-to-phone BLE transport** | **NOT VALIDATED** | **No RoadLink BLE code has ever run on a radio** |
 | Crash detection (sensor) | Not started | Trigger interface exists; `TestCrashDetector` only |
+
+> **Android build status: UNKNOWN.** The last environment to touch this code
+> could not resolve the Android Gradle Plugin, so `assembleDebug` has not been
+> run since the 2026-08-28 changes and no APK has been produced from them. The
+> JVM suite (88 tests), the backend suite (61) and the cross-language wire check
+> all pass. Run `./gradlew :app:assembleDebug` before relying on a build.
 
 Full results, including what each run does *not* prove:
 [`docs/verification-log.md`](docs/verification-log.md).
@@ -186,7 +195,7 @@ Bind `0.0.0.0` so phones can reach it over the LAN. Find the host IP with
 
 ```bash
 cd android
-./gradlew :app:testDebugUnitTest       # 68 JVM tests
+./gradlew :app:testDebugUnitTest       # 88 JVM tests
 ./gradlew :app:assembleDebug
 
 # point the app at your machine instead of the emulator loopback:
@@ -211,9 +220,9 @@ mismatch does not error, it just stores every emergency with `sig_valid=false`.
 
 ## Demo
 
-The sequence below is the demo. Step-by-step recording instructions, with the
-exact log output to expect, ship in the submission package as
-`05_Demo/Demo_Instructions.md`.
+The full scene-by-scene script is [`docs/demo.md`](docs/demo.md). It runs on
+**one phone**, with no Bluetooth and no second device, so the parts of RoadLink
+that are unproven cannot break the parts that are.
 
 All paths use the same state machine, the same persistence and the same audit
 trail. Only the transport differs.
@@ -228,15 +237,21 @@ The demo never depends on staging a real crash. **CREATE TEST SOS** drives the
 identical pipeline a sensor trigger will use (signing, persistence, state
 machine, transport, backend, audit) and only the trigger is simulated.
 
-**The baseline sequence, which carries the product claim:**
+**The sequence that carries the product claim:**
 
-1. Rider tab → turn *relay in range* **off** and *force rider offline* **on**
-2. **CREATE TEST SOS** → the event is persisted, then shows `QUEUED`; nothing
-   reaches the backend
+1. Rider tab → demo controls → *force rider offline* **on**
+2. **CREATE TEST SOS** → persisted, then `OFFLINE / QUEUED`; nothing reaches
+   the backend
 3. Responder tab → no emergency (correct: it genuinely has not arrived)
-4. Turn *force rider offline* **off**
-5. Within seconds the event moves to `DELIVERED` via `DIRECT NETWORK`
-6. Responder tab → the emergency appears, with its delivery path shown
+4. **Force stop the app from Android settings.** The process is gone while the
+   emergency is still undelivered.
+5. Reopen RoadLink, turn *force rider offline* **off**
+6. Within seconds it reads `DELIVERED`, and the custody trail shows every
+   attempt including the interrupted one
+7. Responder tab → the emergency appears, read from the server
+
+Step 4 is the point. An emergency that survives its own application being
+killed is the difference between a claim and a demonstration.
 
 Because BLE is a transport rather than the product, the demonstration above is
 unaffected by whether the radio path has been validated.
@@ -274,8 +289,10 @@ isolating which side of a BLE failure is at fault.
 | [`physical-ble-procedure.md`](docs/physical-ble-procedure.md) | The T1–T11 hardware ladder |
 | [`physical-test-results.md`](docs/physical-test-results.md) | Its results sheet — currently all NOT YET TESTED |
 | [`deployment.md`](docs/deployment.md) | Hosting the backend, and the LAN fallback |
-| [`round2-submission-checklist.md`](docs/round2-submission-checklist.md) | Round 2 submission state, item by item |
-| [`submission-presentation.md`](docs/submission-presentation.md) | Slide-by-slide source for the deck |
+| [`submission-checklist.md`](docs/submission-checklist.md) | Submission state, item by item |
+| [`demo.md`](docs/demo.md) | The demo script, scene by scene |
+| [`codestorm-presentation.md`](docs/codestorm-presentation.md) | Slide-by-slide source for the CodeStorm deck |
+| [`three-minute-pitch.md`](docs/three-minute-pitch.md) | Three-minute spoken pitch, and the questions to expect |
 | [`ADR-002`](docs/decisions/ADR-002-transport-abstraction.md) | Why delivery sits behind a transport abstraction |
 
 ---

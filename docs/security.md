@@ -18,6 +18,7 @@ protecting:
 | An emergency being silently modified in flight | **Yes** — the signature covers every field, including `simulated` |
 | A passive listener tracking a rider from BLE advertisements | **Partly** — the beacon carries no identity, but see below |
 | A duplicate submission corrupting the record | **Yes** — idempotent on `event_id`, append-only audit |
+| An old packet being captured and replayed | **Mostly, as a side effect** — see below |
 | An attacker reading emergencies off the backend | **No** — no authentication, no transport encryption |
 | An attacker forging a packet after extracting the key from the APK | **No** — the HMAC key is shared and compiled in |
 | Denial of service against the backend | **No** — no rate limiting, no auth |
@@ -42,6 +43,27 @@ The `simulated` flag is **inside** the signed canonical string, so no downstream
 layer can relabel a simulated event as real without invalidating the packet.
 That is a deliberate integrity property of the honesty marker, not just of the
 payload.
+
+### Replay
+
+There is **no nonce, no server-side freshness window and no replay counter**.
+A captured packet stays valid indefinitely, and that is a real property of this
+design rather than an oversight that has been fixed.
+
+What limits it is idempotency rather than cryptography. Replaying a packet the
+backend has already seen produces **no new event** — the `event_id` is already
+stored, first write wins, and the replay is recorded as one more audit row. So
+a replay cannot fabricate a second emergency, cannot overwrite the original,
+and cannot change `first_delivery_path`.
+
+What it *can* do is make an old emergency look freshly submitted in the audit
+trail, and — because `created_at` is inside the signature and cannot be edited
+— an attacker replaying a genuinely old packet is submitting something visibly
+stale. It cannot manufacture a *new* emergency without the key.
+
+The remaining exposure is therefore audit noise rather than false emergencies.
+A production design would bind the packet to a freshness window and have the
+backend reject anything outside it, alongside the per-device keys below.
 
 ### The key is a prototype limitation
 

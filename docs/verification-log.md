@@ -424,6 +424,304 @@ Nothing about BLE. No radio, no handset, no instrumented run.
 
 ---
 
+## 2026-08-28 — Interrupted-delivery defect, found and fixed
+
+### Environment note, stated first because it bounds everything below
+
+This session ran in a container with **no Android SDK and no access to Google's
+Maven repository**, so `dl.google.com` was unreachable and AGP, AndroidX, Room
+and Compose could not be resolved. `:app:testDebugUnitTest`, `assembleDebug` and
+any instrumented run were therefore **impossible here** and were not attempted.
+
+What was run instead: a standalone Gradle/Kotlin JVM project compiling the
+**Android-free subset of the real sources** — `domain/`, `delivery/` (less the
+two files importing Bluetooth), `net/` and `ble/BleProtocol.kt` — against the
+real test sources, with the real Kotlin compiler. It initially covered 67 of the 73 JVM tests; the 6 in `BackendConfigTest` were
+excluded because they need an Android `Context`, and were brought in later the
+same day with a stub (see the release-candidate entry below).
+Coroutines resolved to 1.10.2 rather than the pinned 1.11.0, which is a
+harness-only difference.
+
+This is a **JVM** result. It is not an emulator result and not a device result,
+and the shipped Gradle build has **not** been run since these changes. Confirm
+with `./gradlew :app:testDebugUnitTest` before the demo.
+
+### The defect
+
+**An emergency interrupted part way through a delivery attempt was never
+delivered, and it stranded every other queued emergency with it.**
+
+`DeliveryManager` writes an event to disk in `DELIVERY_ATTEMPT` *before* calling
+the transport, so that an attempt is auditable even if the phone dies during it.
+The consequence is that `DELIVERY_ATTEMPT` is the on-disk state for the entire
+duration of a transport call — a five-second connect timeout, a twenty-second
+BLE advertising window. Being killed inside that window is the likely case, not
+the unlucky one.
+
+On the next launch such an event is still pending, so a delivery pass picks it
+up and tries to move it to `DELIVERY_ATTEMPT` again. That is not a legal
+transition, so `transitionTo` threw `IllegalTransitionException`. The exception
+escaped `deliver`, escaped `runDeliveryPass`, and aborted the entire pass. Since
+`pending()` is ordered oldest-first, one stranded emergency stopped **every**
+newer emergency from being attempted — every three seconds, indefinitely.
+
+A second path reached the same state: an event killed between the durable write
+in `submit` and the move to `QUEUED_OFFLINE` stayed at `CONFIRMED_EMERGENCY`,
+which also cannot move directly to `DELIVERY_ATTEMPT`.
+
+Nothing was ever *lost* — the invariant held, the events were on disk with their
+full history. But they were never delivered, which is the other half of the
+product's promise, and it broke under exactly the interruption the product
+exists to survive.
+
+Reproduced first as three failing tests, all raising
+`IllegalTransitionException`, before any fix was written.
+
+### The fix
+
+1. `recoverIfInterrupted` returns an event found in a non-resting state to
+   `QUEUED_OFFLINE` before any attempt begins. It runs inside `deliver`, so it
+   covers every entry point rather than only application startup.
+2. The interruption is **recorded, not repaired quietly**: a new
+   `AttemptOutcome.INTERRUPTED` row names the transport and the attempt number.
+   It is deliberately not `FAILED` — a failure is something that was observed,
+   whereas this attempt's outcome is genuinely unknown, and it is also the
+   honest explanation for an attempt count with no matching outcome.
+   Recovery does not increment `attemptCount`; nothing new was tried.
+3. Each event in a pass is now isolated with `runCatching`, so no single record
+   can abort the pass for the others.
+
+`INTERRUPTED` needed **no schema change and no migration**: `Entities.kt` stores
+enums by name in a `TEXT` column and falls back conservatively on an
+unrecognised value.
+
+### Results
+
+| Suite | Result | Environment |
+|---|---|---|
+| Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP, live uvicorn in this container |
+| Android core subset (JVM tests) | **passed, 0 failed** | JVM harness described above |
+| `:app:testDebugUnitTest` | **NOT RUN** | No Android SDK available |
+| `assembleDebug` / instrumented / device | **NOT RUN** | No Android SDK available |
+
+Five tests added in `DeliveryRecoveryTest`; the other 62 continued to pass
+unchanged, so the fix is not a behaviour change to any existing path.
+
+### What this does NOT prove
+
+Nothing about BLE, nothing about a physical device, nothing about the Compose
+UI, and nothing about the assembled APK. The interruption tested here is a
+simulated on-disk state, not an observed process kill on hardware — killing the
+app on a real phone and watching it recover is a **device** test and remains
+outstanding.
+
+---
+
+## 2026-08-28 — Rider and responder screens reordered
+
+### What changed
+
+The Rider screen used to open with the backend-address editor and four blocks
+of development controls, and the emergencies themselves — the product — were
+last. It now opens with a status banner answering "is my emergency safe?", then
+the trigger, then the emergencies with a per-emergency custody trail. Every
+development control is behind one collapsed toggle, still present and still
+labelled. The backend-address editor surfaces itself automatically when the
+backend is unreachable, because that is the one failure a first-time installer
+can actually fix.
+
+The responder screen now states on the screen that it reads from the server
+rather than from the phone, and spells out the two fidelity axes in words
+instead of leaving a pair of chips to be interpreted.
+
+### How it was checked, and how far that goes
+
+Compose **cannot be compiled in this environment** — Google's Maven repository
+is unreachable — so the following is what was actually done:
+
+| Check | Result |
+|---|---|
+| Kotlin parser over `RiderScreen.kt`, `ResponderScreen.kt`, `Components.kt` | **0 syntax errors** |
+| Brace and parenthesis balance on the same three files | **balanced** |
+| Every domain call the screens make, mirrored in plain Kotlin and compiled against the real types | **compiles** |
+| `RiderStatus` and `CustodyTimeline` behaviour | **15 tests, 0 failures** |
+
+The mirrored call-site check earned its place immediately: it failed on a
+non-exhaustive `when`, because `CustodyStep.Kind` declared an `ATTEMPT`
+constant that `CustodyTimeline.of` never emits. That would have been a
+compile error on the first real build. The unused constant was removed rather
+than given a branch.
+
+### What this does NOT prove
+
+**The Compose code has never been compiled and the screens have never been
+rendered.** Parsing is not type checking: a wrong parameter name or a bad
+argument type in a Compose call would not be caught by anything above. No APK
+was built, no screenshot was taken, and no layout was seen.
+
+Run `./gradlew :app:assembleDebug` before relying on any of this. That build is
+the first real check of these files.
+
+---
+
+## 2026-08-28 — Release-candidate build verification
+
+The one question that mattered: **does the Android project still build after the
+2026-08-28 changes?**
+
+### Answer: UNKNOWN. The build could not be attempted here.
+
+All three Gradle tasks were run and all three failed identically, at the same
+point:
+
+```
+* Where:
+Build file 'android/build.gradle.kts' line: 1
+
+* What went wrong:
+Plugin [id: 'com.android.application', version: '8.13.0', apply: false]
+was not found in any of the following sources:
+  - Plugin Repositories (could not resolve plugin artifact
+    'com.android.application:com.android.application.gradle.plugin:8.13.0')
+```
+
+| Task | Result |
+|---|---|
+| `:app:testDebugUnitTest` | FAILED — plugin resolution |
+| `:app:assembleDebug` | FAILED — plugin resolution |
+| `:app:assembleRelease` | FAILED — plugin resolution |
+
+### This is an ENVIRONMENT failure, not a source failure
+
+The distinction is not a judgement call here, it is visible in the output. The
+build fails at `build.gradle.kts` **line 1**, while resolving the Android Gradle
+Plugin itself. No source file was read, no Kotlin was compiled, and no error
+refers to any file in this repository.
+
+The cause is network policy in the build environment:
+
+| Host | Result |
+|---|---|
+| `dl.google.com/dl/android/maven2/...` | **blocked** (HTTP 403 at the proxy) |
+| `dl.google.com/android/repository/...` (SDK tools) | **blocked** |
+| `repo.maven.apache.org` | reachable (200) |
+
+So AGP, AndroidX, Room and Compose cannot be resolved, and no Android SDK can be
+installed. **No APK was produced, and none could be.**
+
+Nothing in the build configuration was modified to work around this. Changing
+repositories or plugin versions to satisfy a broken environment would make the
+build weaker on the machine that matters.
+
+### What was verified instead
+
+| Check | Result | Class |
+|---|---|---|
+| Backend ingestion + idempotency | **61 passed, 0 failed** | **VERIFIED** — real HTTP, live uvicorn |
+| Android JVM suite, all of it | **88 passed, 0 failed** | **VERIFIED** — JVM harness, not the Gradle build |
+| Kotlin ↔ Python wire compatibility | **PASSED**, `sig_valid=true` | **VERIFIED** — real HTTP |
+| Compose sources parse | 0 syntax errors | **VERIFIED** — parser only |
+| `:app:testDebugUnitTest` / `assembleDebug` / `assembleRelease` | — | **UNKNOWN** |
+| APK exists, installs, launches | — | **UNKNOWN** |
+
+The JVM harness reached all 88 tests this session. `BackendConfigTest`'s 6 had
+been excluded because `BackendConfig` needs an Android `Context`; a minimal
+`Context`/`SharedPreferences` stub was written **in the scratchpad only** so the
+real file compiles and its tests run. That stub is not in this repository and is
+not part of the build.
+
+### What this does NOT prove
+
+**It does not prove the app compiles.** The JVM harness covers `domain/`,
+`delivery/`, `net/`, `ble/BleProtocol.kt` and `platform/BackendConfig.kt`. It
+does **not** cover any Compose file, any Room-generated code, resource merging,
+manifest merging, dexing or packaging. A type error in `RiderScreen.kt` would
+not be caught by anything recorded above.
+
+`./gradlew :app:assembleDebug` on a machine with the Android SDK is the first
+real check, and it has not happened.
+
+---
+
+## 2026-08-28 — Production hardening pass
+
+A component-by-component review of the release candidate. Two genuine defects
+were found, both in `BleCentral`, both **stalls** rather than crashes, and both
+in code that has never run on a radio — so neither could have been caught by any
+test recorded in this log.
+
+### Defect 1 — service discovery depended on the MTU callback
+
+`onConnectionStateChange` requested a 517-byte MTU on connect, and
+`discoverServices()` was called **only** from `onMtuChanged`. `requestMtu`
+returns a boolean, and a refused request produces no callback at all. In that
+case the relay would connect, request an MTU, and then sit with an open
+connection forever: no discovery, no read, no disconnect, no retry, `pendingRef`
+still set, and scanning never resumed.
+
+The code comment asserted that "nothing downstream depends on this succeeding",
+which was true of the MTU value and false of the control flow. A refused request
+now continues straight to `discoverServices()`.
+
+### Defect 2 — a missing ACK characteristic left the connection open
+
+If the rider did not expose the ACK characteristic, `writeAck` logged, cleared
+`pendingRef` and returned **without disconnecting**. The emergency was already
+stored so nothing was lost, but the GATT client slot stayed held and scanning
+never resumed, so the relay silently stopped collecting. It now disconnects,
+which frees the slot and lets `onConnectionStateChange` resume scanning.
+
+Both would have presented on hardware as "it connects and then nothing
+happens" during T5 or T9, which is among the hardest BLE symptoms to diagnose.
+
+### Residual risk NOT fixed
+
+`writeAck` checks whether the write **threw**, but not whether it was refused
+(`writeCharacteristic` returns a boolean pre-API 33 and a status code from 33).
+A refused write stalls the same way as defect 1. It is left alone deliberately:
+the fix needs an API-33-only class that cannot be compile-checked in this
+environment, and the failure is contained — the rider simply never receives an
+ACK, keeps the emergency queued and keeps trying, which is the safe direction.
+Worth fixing on a machine that can build.
+
+### Reviewed and found correct
+
+Android: Room migration v1→v2 with no destructive fallback and exported
+schemas; `INTERRUPTED` needs no migration because enums are stored by name;
+`EmergencyDao` has no `@Delete` and no `DELETE` statement anywhere; ABORT rather
+than REPLACE on insert conflict; `BlePeripheral` cleans up advertiser and GATT
+server in a `finally`; `BleCentral` calls `close()` on disconnect and clears
+its handler; `AndroidConnectivity` registers no callback so there is nothing to
+leak; `SosApiClient` sets both timeouts and disconnects in `finally`; no
+Activity context is retained anywhere.
+
+Backend: every model is `extra="forbid"` with range and length constraints, so
+malformed input is a 422 rather than a coercion; ingest runs `BEGIN IMMEDIATE`
+with `INSERT OR IGNORE`, appends an audit row on both branches, rolls back on
+exception and closes the connection in `finally`; WAL plus a 10s busy timeout;
+first write wins and `first_delivery_path` is never overwritten.
+
+Security: replay is now documented in `security.md` — there is no nonce and no
+freshness window, and what limits replay is idempotency rather than
+cryptography.
+
+### Suites re-run after the changes
+
+| Suite | Result |
+|---|---|
+| Backend ingestion + idempotency | **61 passed, 0 failed** |
+| Android JVM suite | **88 passed, 0 failed** |
+| `BleCentral.kt` parse check | 0 syntax errors |
+
+### What this does NOT prove
+
+`BleCentral` is not covered by any automated test — it imports Bluetooth
+classes and cannot run on a JVM. Both fixes are **reasoned, parse-checked and
+uncompiled**. They are corrections to a code path that has never executed, and
+they remain UNVERIFIED until the T1–T11 ladder runs on real hardware.
+
+---
+
 ## Not yet run
 
 [`docs/physical-ble-procedure.md`](physical-ble-procedure.md) — the T1–T11

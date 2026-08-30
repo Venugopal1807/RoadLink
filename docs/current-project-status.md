@@ -53,6 +53,8 @@ the event.
 | FastAPI ingestion + idempotency + audit | Yes | SQLite, WAL |
 | Responder interface | Yes | Reads the backend, not local state |
 | Rider interface + demo controls | Yes | |
+| Rider status vocabulary (6 states) | Yes | `RiderStatus`, incl. FAILED BUT RETAINED |
+| Per-emergency custody timeline | Yes | `CustodyTimeline`, derived only from stored rows |
 | **Sensor crash detection** | **No** | `TestCrashDetector` only; the trigger interface exists |
 
 ## 3. What has been verified, and how
@@ -62,14 +64,22 @@ Re-run on 2026-08-23. Commands are in [`testing.md`](testing.md).
 | Suite | Result | Evidence class |
 |---|---|---|
 | Backend ingestion + idempotency | **61 passed, 0 failed** | Real HTTP against live uvicorn |
-| Android JVM unit tests | **68 passed, 0 failed** | JVM |
+| Android JVM unit tests | **88 of 88 passed, 0 failed** (2026-08-28) | JVM harness, not the Gradle build — see the environment note in [`verification-log.md`](verification-log.md) |
 | Kotlin ↔ Python wire compatibility | **PASSED**, `sig_valid=true` | Real HTTP |
 | `:app:assembleDebug` | BUILD SUCCESSFUL | |
 | `:app:assembleDebugAndroidTest` | BUILD SUCCESSFUL | |
 | `:spike-ble:assembleDebug` | BUILD SUCCESSFUL | |
 
 JVM test breakdown: BLE protocol 15, delivery invariants 8, delivery scenarios
-12, relay handoff 10, canonical signing 10, envelope 7.
+12, relay handoff 10, delivery recovery 5, canonical signing 10, envelope 7,
+backend-address handling 6, rider status 8, custody timeline 7.
+
+The 2026-08-23 figures came from the full `:app:testDebugUnitTest`. The
+2026-08-28 re-run used a JVM harness over the Android-free sources, because no
+Android SDK and no access to Google's Maven repository were available. All 88
+tests run there. **The Gradle build itself has NOT been run since the
+2026-08-28 changes — it cannot resolve the Android Gradle Plugin in that
+environment. The Android build status is UNKNOWN.**
 
 **Instrumented tests were not re-run in this session** (`adb devices` empty).
 Their 8/8 figure is the earlier EMULATED result, carried forward and labelled as
@@ -131,7 +141,20 @@ with-location path is not).
 
 ## 8. Known defects
 
-None outstanding. One was found and fixed during this audit:
+None outstanding. Two have been found and fixed, both recorded in
+[`verification-log.md`](verification-log.md):
+
+**An emergency interrupted mid-delivery was never delivered** (found 2026-08-28).
+An event is written to disk in `DELIVERY_ATTEMPT` before the transport is
+called, so that is its on-disk state for the whole duration of a transport call
+- a five-second connect timeout, a twenty-second advertising window. Killed
+inside that window, the event could not legally re-enter `DELIVERY_ATTEMPT` on
+the next launch, so the delivery pass threw on it and aborted; because pending
+events are ordered oldest-first, one stranded emergency stopped every newer one
+being attempted too. Nothing was lost, but nothing was delivered either. Fixed
+by recovering an interrupted event to `QUEUED_OFFLINE` before any attempt,
+recording the interruption as `INTERRUPTED` rather than as a failure, and
+isolating each event in a pass. Five tests in `DeliveryRecoveryTest`.
 
 **Unbounded audit-trail growth while offline.** A transport reporting itself
 unavailable was never tried, so it did not advance the attempt count and did not
@@ -145,7 +168,7 @@ returns. Covered by two new tests in `DeliveryScenarioTest`.
 
 ## 9. Submission gaps
 
-Tracked in [`round2-submission-checklist.md`](round2-submission-checklist.md).
+Tracked in [`submission-checklist.md`](submission-checklist.md).
 The ones that
 need a human, not a code change:
 

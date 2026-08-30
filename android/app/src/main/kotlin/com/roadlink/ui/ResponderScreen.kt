@@ -58,6 +58,17 @@ fun ResponderScreen(vm: RoadLinkViewModel) {
                             null -> StatusChip("CHECKING", RlSlate)
                         }
                     }
+                    // The distinction this whole screen exists to make. A
+                    // responder view fed from the phone's own database would
+                    // look identical and would prove nothing.
+                    Text(
+                        "Everything below is read from the server, not from this phone. " +
+                            "An emergency appears here only once the backend has actually " +
+                            "received it.",
+                        fontSize = 10.sp,
+                        color = RlSlate,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
                 }
             }
         }
@@ -111,14 +122,31 @@ private fun ResponderEventCard(event: ResponderEvent) {
             ) {
                 // Never suppressed. If the trigger was simulated, the responder
                 // sees that before anything else.
-                FidelityBadge(event.simulated)
+                FidelityBadge(event.simulated, if (event.simulated) "SIMULATED TRIGGER" else "REAL TRIGGER")
                 // And separately: how it actually got here.
                 StatusChip(
-                    label = event.firstDeliveryPath.uppercase(),
+                    label = "VIA " + event.firstDeliveryPath.uppercase(),
                     color = if (event.arrivedByRealTransport) RlBlue else RlViolet,
                 )
                 if (!event.signatureValid) StatusChip("UNVERIFIED SIGNATURE", RlOrange)
             }
+
+            // The two axes spelled out, because a chip pair is easy to
+            // misread as one claim. They are independent: a real trigger
+            // carried by the simulator is still not evidence of a real radio.
+            Text(
+                (if (event.simulated) "Trigger: simulated test button. " else "Trigger: sensor. ") +
+                    when (event.firstDeliveryPath) {
+                        "direct" -> "Arrived over the rider's own network connection."
+                        "ble_relay" -> "Arrived via a nearby phone acting as a BLE relay."
+                        "simulated_relay" ->
+                            "Arrived via the development simulator, not a physical radio."
+                        else -> "Arrived via ${event.firstDeliveryPath}."
+                    },
+                fontSize = 10.sp,
+                color = if (event.simulated || !event.arrivedByRealTransport) RlViolet else RlSlate,
+                modifier = Modifier.padding(top = 6.dp),
+            )
 
             HorizontalDivider(Modifier.padding(vertical = 10.dp))
 

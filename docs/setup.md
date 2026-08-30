@@ -133,7 +133,7 @@ See [`testing.md`](testing.md) for the full matrix and what each suite proves.
 
 ```bash
 cd backend && python tests/test_idempotency.py     # 61 assertions
-cd android && ./gradlew :app:testDebugUnitTest     # 68 JVM tests
+cd android && ./gradlew :app:testDebugUnitTest     # 88 JVM tests
 cd .. && python tools/verify_wire_compat.py        # cross-language wire check
 ```
 
